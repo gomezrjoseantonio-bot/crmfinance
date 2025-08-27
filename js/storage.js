@@ -29,15 +29,102 @@ export function ensureSeed(){
   }
   applyTheme();
 }
-export function getSettings(){ return JSON.parse(LS.getItem(SETTINGS_KEY)||'{}'); }
-export function setSettings(s){ LS.setItem(SETTINGS_KEY, JSON.stringify(s)); applyTheme(); }
-export function getYear(){ return getSettings().year || new Date().getFullYear(); }
-export function setYear(y){ const s=getSettings(); s.year=y; setSettings(s); }
-export function getAccounts(){ return JSON.parse(LS.getItem(ACCOUNTS_KEY)||'[]'); }
-export function saveAccounts(arr){ LS.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); }
+export function getSettings(){ 
+  try {
+    return JSON.parse(LS.getItem(SETTINGS_KEY)||'{}'); 
+  } catch (error) {
+    console.error('Error al cargar configuración:', error);
+    return {};
+  }
+}
 
-export function getReal(y=getYear()){ return JSON.parse(LS.getItem(REAL_KEY(y))||'[]'); }
-export function saveReal(rows,y=getYear()){ LS.setItem(REAL_KEY(y), JSON.stringify(rows)); }
+export function setSettings(s){ 
+  try {
+    if (!s || typeof s !== 'object') {
+      throw new Error('Configuración inválida');
+    }
+    LS.setItem(SETTINGS_KEY, JSON.stringify(s)); 
+    applyTheme(); 
+  } catch (error) {
+    console.error('Error al guardar configuración:', error);
+    throw error;
+  }
+}
+
+export function getYear(){ return getSettings().year || new Date().getFullYear(); }
+
+export function setYear(y){ 
+  try {
+    const year = parseInt(y, 10);
+    if (isNaN(year) || year < 1900 || year > 2100) {
+      throw new Error('Año inválido');
+    }
+    const s=getSettings(); 
+    s.year=year; 
+    setSettings(s); 
+  } catch (error) {
+    console.error('Error al establecer año:', error);
+    throw error;
+  }
+}
+
+export function getAccounts(){ 
+  try {
+    return JSON.parse(LS.getItem(ACCOUNTS_KEY)||'[]'); 
+  } catch (error) {
+    console.error('Error al cargar cuentas:', error);
+    return [];
+  }
+}
+
+export function saveAccounts(arr){ 
+  try {
+    if (!Array.isArray(arr)) {
+      throw new Error('Las cuentas deben ser un array');
+    }
+    // Validar estructura de cuentas
+    for (const account of arr) {
+      if (!account.id || !account.name) {
+        throw new Error('Cuenta inválida: falta ID o nombre');
+      }
+    }
+    LS.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); 
+  } catch (error) {
+    console.error('Error al guardar cuentas:', error);
+    throw error;
+  }
+}
+
+export function getReal(y=getYear()){ 
+  try {
+    return JSON.parse(LS.getItem(REAL_KEY(y))||'[]'); 
+  } catch (error) {
+    console.error('Error al cargar transacciones:', error);
+    return [];
+  }
+}
+
+export function saveReal(rows,y=getYear()){ 
+  try {
+    if (!Array.isArray(rows)) {
+      throw new Error('Las transacciones deben ser un array');
+    }
+    // Validar estructura de transacciones
+    for (const row of rows) {
+      if (!row.date || !row.concept || typeof row.amount !== 'number') {
+        throw new Error('Transacción inválida: faltan campos requeridos');
+      }
+      // Validar formato de fecha
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) {
+        throw new Error(`Fecha inválida: ${row.date}`);
+      }
+    }
+    LS.setItem(REAL_KEY(y), JSON.stringify(rows)); 
+  } catch (error) {
+    console.error('Error al guardar transacciones:', error);
+    throw error;
+  }
+}
 
 export function applyTheme(){
   const s=getSettings();
