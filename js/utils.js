@@ -12,3 +12,100 @@ export function parseEuro(str){
 export function groupBy(arr, key){
   return arr.reduce((m,it)=>{ const k=typeof key==='function'? key(it): it[key]; (m[k]||(m[k]=[])).push(it); return m; },{});
 }
+
+// Nuevas funciones de utilidad para manejo de errores y UX
+export function showMessage(message, type = 'info') {
+  // Crear elemento de notificación
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+  
+  // Estilos inline para la notificación
+  Object.assign(notification.style, {
+    position: 'fixed',
+    top: '20px',
+    right: '20px',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    color: 'white',
+    fontWeight: '500',
+    zIndex: '9999',
+    maxWidth: '400px',
+    opacity: '0',
+    transform: 'translateX(100%)',
+    transition: 'all 0.3s ease'
+  });
+
+  // Colores según el tipo
+  if (type === 'error') {
+    notification.style.backgroundColor = '#dc2626';
+  } else if (type === 'success') {
+    notification.style.backgroundColor = '#059669';
+  } else if (type === 'warning') {
+    notification.style.backgroundColor = '#d97706';
+  } else {
+    notification.style.backgroundColor = '#2563eb';
+  }
+
+  document.body.appendChild(notification);
+
+  // Animación de entrada
+  setTimeout(() => {
+    notification.style.opacity = '1';
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+
+  // Remover después de 5 segundos
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 5000);
+}
+
+export function showError(message) {
+  showMessage(message, 'error');
+}
+
+export function showSuccess(message) {
+  showMessage(message, 'success');
+}
+
+export function showWarning(message) {
+  showMessage(message, 'warning');
+}
+
+export function confirmAction(message, callback) {
+  if (confirm(message)) {
+    try {
+      callback();
+    } catch (error) {
+      showError(`Error: ${error.message}`);
+    }
+  }
+}
+
+export function validateRequired(value, fieldName) {
+  if (!value || (typeof value === 'string' && value.trim() === '')) {
+    throw new Error(`${fieldName} es requerido`);
+  }
+  return true;
+}
+
+export function validateNumber(value, fieldName, min, max) {
+  const num = parseFloat(value);
+  if (isNaN(num)) {
+    throw new Error(`${fieldName} debe ser un número válido`);
+  }
+  if (min !== undefined && num < min) {
+    throw new Error(`${fieldName} debe ser mayor o igual a ${min}`);
+  }
+  if (max !== undefined && num > max) {
+    throw new Error(`${fieldName} debe ser menor o igual a ${max}`);
+  }
+  return num;
+}
