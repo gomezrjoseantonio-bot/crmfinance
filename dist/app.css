@@ -1,0 +1,46 @@
+
+:root{
+  --bg:#ffffff;
+  --fg:#111827;
+  --muted:#6b7280;
+  --card:#f9fafb;
+  --border:#e5e7eb;
+  --accent:#7c3aed; /* default violet */
+}
+body.theme-dark{
+  --bg:#0b1020;
+  --fg:#e5e7eb;
+  --muted:#94a3b8;
+  --card:#101836;
+  --border:#1f2a4d;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue","Apple Color Emoji","Segoe UI Emoji";}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.topbar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:24px;height:24px}
+.menu{display:flex;gap:10px}
+.menu a{padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(0,0,0,0.02),rgba(0,0,0,0.01));color:var(--fg)}
+.menu a.active{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent)}
+.container{max-width:1100px;margin:24px auto;padding:0 16px}
+.footer{display:flex;gap:8px;justify-content:space-between;padding:16px;border-top:1px solid var(--border);color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.row{display:flex;gap:16px;flex-wrap:wrap}
+.col{flex:1 1 300px;min-width:280px}
+h1{font-size:28px;margin:0 0 6px 0}
+h2{font-size:18px;margin:0 0 8px 0}
+.muted{color:var(--muted)}
+.kpi{font-weight:700;font-size:24px}
+.badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:12px;border:1px solid var(--border);color:var(--muted)}
+input,select,button{font:inherit;color:inherit}
+input,select{padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+button{padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);cursor:pointer}
+button.primary{background:var(--accent);color:white;border-color:var(--accent)}
+.grid{overflow:auto;border:1px solid var(--border);border-radius:12px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+tr:nth-child(2n){background:color-mix(in srgb, var(--card) 60%, var(--bg))}
+.small{font-size:12px}
