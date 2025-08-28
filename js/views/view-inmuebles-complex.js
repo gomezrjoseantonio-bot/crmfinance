@@ -1,6 +1,120 @@
 import { getProperties, saveProperties } from '../storage.js';
 import { fmtEUR, parseEuro } from '../utils.js';
 
+function renderRentalYearConfiguration(property) {
+  const currentYear = new Date().getFullYear();
+  const selectedYear = property.selectedRentalYear || currentYear;
+  const yearlyRentals = property.yearlyRentals || {};
+  const yearData = yearlyRentals[selectedYear] || {
+    monthlyRent: property.monthlyRent || 0,
+    bank: '',
+    startMonth: 1,
+    endMonth: 12,
+    adjustments: {}
+  };
+  
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  
+  return `
+    <div style="background:#f9f9f9; padding:15px; border-radius:5px; margin-top:10px;">
+      <h4 style="margin:0 0 15px 0;">Configuración de Rentas para ${selectedYear}</h4>
+      
+      <div class="row">
+        <div class="col">
+          <label class="small muted">Renta Mensual Base (€)</label><br/>
+          <input type="number" id="yearly-monthly-rent" value="${yearData.monthlyRent}" style="width:100%; margin-bottom:10px">
+          
+          <label class="small muted">Banco de Recepción</label><br/>
+          <select id="yearly-rent-bank" style="width:100%; margin-bottom:10px">
+            <option value="">Seleccionar banco</option>
+            <option value="SANTANDER" ${yearData.bank === 'SANTANDER' ? 'selected' : ''}>Santander</option>
+            <option value="BBVA" ${yearData.bank === 'BBVA' ? 'selected' : ''}>BBVA</option>
+            <option value="CAIXABANK" ${yearData.bank === 'CAIXABANK' ? 'selected' : ''}>CaixaBank</option>
+            <option value="BANKINTER" ${yearData.bank === 'BANKINTER' ? 'selected' : ''}>Bankinter</option>
+            <option value="ING" ${yearData.bank === 'ING' ? 'selected' : ''}>ING</option>
+          </select>
+        </div>
+        <div class="col">
+          <label class="small muted">Período de Aplicación</label><br/>
+          <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <div>
+              <label class="small muted">Desde mes:</label><br/>
+              <select id="yearly-start-month" style="width:80px;">
+                ${Array.from({length: 12}, (_, i) => {
+                  const month = i + 1;
+                  const selected = month === yearData.startMonth ? 'selected' : '';
+                  return `<option value="${month}" ${selected}>${monthNames[i]}</option>`;
+                }).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="small muted">Hasta mes:</label><br/>
+              <select id="yearly-end-month" style="width:80px;">
+                ${Array.from({length: 12}, (_, i) => {
+                  const month = i + 1;
+                  const selected = month === yearData.endMonth ? 'selected' : '';
+                  return `<option value="${month}" ${selected}>${monthNames[i]}</option>`;
+                }).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top:15px;">
+        <h4 style="margin:0 0 10px 0;">Ajustes Mensuales Específicos</h4>
+        <div class="small muted" style="margin-bottom:10px;">Configura importes específicos para meses concretos (opcional)</div>
+        
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;">
+          ${monthNames.map((month, index) => {
+            const monthNum = index + 1;
+            const adjustment = yearData.adjustments[monthNum] || '';
+            return `
+              <div>
+                <label class="small muted">${month} ${selectedYear}</label><br/>
+                <input type="number" id="monthly-adjustment-${monthNum}" value="${adjustment}" 
+                       placeholder="${yearData.monthlyRent}" style="width:100%;" 
+                       title="Dejar vacío para usar renta base">
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      
+      <div style="margin-top:15px; padding:10px; background:#e8f4fd; border-radius:5px;">
+        <strong>Resumen Anual ${selectedYear}:</strong>
+        <div id="yearly-summary-${selectedYear}">
+          ${renderYearlySummary(yearData, selectedYear)}
+        </div>
+      </div>
+      
+      <button onclick="saveYearlyRentalConfig('${property.id}')" class="primary" style="margin-top:10px;">Guardar Configuración ${selectedYear}</button>
+    </div>
+  `;
+}
+
+function renderYearlySummary(yearData, year) {
+  const monthlyRent = yearData.monthlyRent || 0;
+  const startMonth = yearData.startMonth || 1;
+  const endMonth = yearData.endMonth || 12;
+  const adjustments = yearData.adjustments || {};
+  
+  let totalAnnual = 0;
+  let activeMonths = 0;
+  
+  for (let month = startMonth; month <= endMonth; month++) {
+    const monthlyAmount = adjustments[month] ? parseFloat(adjustments[month]) : monthlyRent;
+    totalAnnual += monthlyAmount;
+    activeMonths++;
+  }
+  
+  return `
+    <div>Renta total anual: <strong>${fmtEUR(totalAnnual)}</strong></div>
+    <div>Meses activos: ${activeMonths} | Promedio mensual: ${fmtEUR(totalAnnual / Math.max(1, activeMonths))}</div>
+    <div>Banco: <strong>${yearData.bank || 'No especificado'}</strong></div>
+  `;
+}
+
 function renderPortfolioSummary(properties) {
   let totalInvestment = 0;
   let totalMonthlyRent = 0;
@@ -124,6 +238,23 @@ function showPropertyDetails(property, root) {
         <div id="full-config" style="display:${(property.rentalType || 'full') === 'full' ? 'block' : 'none'}">
           <label class="small muted">Renta Mensual Total (€)</label><br/>
           <input type="number" id="monthly-rent" value="${property.monthlyRent || 0}" style="width:100%; margin-bottom:10px">
+        </div>
+        
+        <div style="margin-top:15px; border-top:1px solid #ddd; padding-top:15px;">
+          <h3 style="margin:0 0 10px 0;">📅 Configuración de Rentas por Año</h3>
+          
+          <label class="small muted">Año de Configuración:</label><br/>
+          <select id="rental-year" style="width:120px; margin-bottom:10px;" onchange="updateRentalYearConfig('${property.id}')">
+            ${Array.from({length: 10}, (_, i) => {
+              const year = new Date().getFullYear() + i - 2;
+              const selected = year === new Date().getFullYear() ? 'selected' : '';
+              return `<option value="${year}" ${selected}>${year}</option>`;
+            }).join('')}
+          </select>
+          
+          <div id="rental-year-config">
+            ${renderRentalYearConfiguration(property)}
+          </div>
         </div>
         
         <button onclick="saveRentalConfig('${property.id}')" class="primary">Guardar Configuración</button>
@@ -915,6 +1046,57 @@ const view = {
       
       // Future implementation: Update the analysis with year-specific budget data
       console.log(`Análisis actualizado para el año ${selectedYear} de la propiedad ${propertyId}`);
+    };
+    
+    // Rental year configuration functions
+    window.updateRentalYearConfig = (propertyId) => {
+      const properties = getProperties();
+      const property = properties.find(p => p.id === propertyId);
+      if (!property) return;
+      
+      const selectedYear = parseInt(root.querySelector('#rental-year').value);
+      property.selectedRentalYear = selectedYear;
+      
+      saveProperties(properties);
+      showPropertyDetails(property, root);
+    };
+    
+    window.saveYearlyRentalConfig = (propertyId) => {
+      const properties = getProperties();
+      const property = properties.find(p => p.id === propertyId);
+      if (!property) return;
+      
+      const selectedYear = parseInt(root.querySelector('#rental-year').value);
+      
+      if (!property.yearlyRentals) property.yearlyRentals = {};
+      
+      // Collect monthly adjustments
+      const adjustments = {};
+      for (let month = 1; month <= 12; month++) {
+        const adjustmentInput = root.querySelector(`#monthly-adjustment-${month}`);
+        if (adjustmentInput && adjustmentInput.value) {
+          adjustments[month] = parseFloat(adjustmentInput.value);
+        }
+      }
+      
+      property.yearlyRentals[selectedYear] = {
+        monthlyRent: parseFloat(root.querySelector('#yearly-monthly-rent').value) || 0,
+        bank: root.querySelector('#yearly-rent-bank').value,
+        startMonth: parseInt(root.querySelector('#yearly-start-month').value) || 1,
+        endMonth: parseInt(root.querySelector('#yearly-end-month').value) || 12,
+        adjustments: adjustments
+      };
+      
+      // Update the property's main monthly rent with current year's base rent
+      if (selectedYear === new Date().getFullYear()) {
+        property.monthlyRent = property.yearlyRentals[selectedYear].monthlyRent;
+      }
+      
+      saveProperties(properties);
+      alert(`Configuración de rentas para ${selectedYear} guardada correctamente`);
+      
+      // Refresh the P&L view to show updated calculations
+      showPropertyDetails(property, root);
     };
   }
 };

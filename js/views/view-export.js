@@ -35,11 +35,11 @@ async function readFile(file){
 }
 
 const view = {
-  route:'#/export', title:'Export/Import',
+  route:'#/export', title:'Reportes',
   async mount(root){
     root.innerHTML = `<div class="row"><div class="col"><div class="card">
-      <h1>💾 Import/Export Avanzado</h1>
-      <div class="small muted">Gestión completa de datos con validación y mapeo</div>
+      <h1>📊 Reportes y Exportaciones</h1>
+      <div class="small muted">Gestión completa de datos con validación, mapeo y exportaciones avanzadas</div>
       
       <div class="row" style="margin-top:20px">
         <div class="col">
@@ -89,6 +89,10 @@ const view = {
           </div>
           
           <div style="margin:10px 0">
+            <button id="exportYearlyRentalsXLS" class="primary">📅 Exportar Configuración Anual de Rentas (XLS)</button>
+          </div>
+          
+          <div style="margin:10px 0">
             <button id="exportCompleteDataXLS">📁 Exportar Datos Completos (XLS)</button>
           </div>
           
@@ -135,6 +139,7 @@ const view = {
     root.querySelector('#exportJSON').onclick = () => exportJSON(root);
     root.querySelector('#exportPropertiesXLS').onclick = () => exportPropertiesXLS(root);
     root.querySelector('#exportOperatingCostsXLS').onclick = () => exportOperatingCostsXLS(root);
+    root.querySelector('#exportYearlyRentalsXLS').onclick = () => exportYearlyRentalsXLS(root);
     root.querySelector('#exportCompleteDataXLS').onclick = () => exportCompleteDataXLS(root);
     root.querySelector('#exportPDF').onclick = () => {
       exportPDF(root);
@@ -358,7 +363,8 @@ function exportPropertiesXLS(root) {
   const headers = [
     'ID', 'Dirección', 'Ciudad', 'Código Postal', 'Región', 'Referencia Catastral',
     'Fecha Compra', 'Valor Compra', 'Tipo Alquiler', 'Habitaciones Disponibles', 
-    'Renta Mensual Total', 'Detalles Habitaciones', 'Inversión Total', 'Rentabilidad Bruta (%)', 'Rentabilidad Neta (%)'
+    'Renta Mensual Total', 'Configuración Anual', 'Bancos de Recepción', 'Detalles Habitaciones', 
+    'Inversión Total', 'Rentabilidad Bruta (%)', 'Rentabilidad Neta (%)'
   ];
   
   const csvRows = [headers.join(';')];
@@ -390,6 +396,20 @@ function exportPropertiesXLS(root) {
     const annualNet = annualRent - totalAnnualOperatingCosts - annualFinancingCosts;
     const netYield = totalInvestment > 0 ? (annualNet / totalInvestment * 100) : 0;
     
+    // Format yearly rental configuration
+    let yearlyConfig = '';
+    let banksList = '';
+    if (property.yearlyRentals) {
+      const yearlyEntries = Object.entries(property.yearlyRentals).map(([year, data]) => {
+        const totalYearlyRent = calculateYearlyRent(data);
+        return `${year}: ${fmtEUR(totalYearlyRent)} (${data.bank || 'Sin banco'})`;
+      });
+      yearlyConfig = yearlyEntries.join(' | ');
+      
+      const banks = [...new Set(Object.values(property.yearlyRentals).map(data => data.bank).filter(Boolean))];
+      banksList = banks.join(', ');
+    }
+    
     // Format room details
     let roomDetails = '';
     if (property.rentalType === 'rooms' && property.rooms) {
@@ -410,6 +430,8 @@ function exportPropertiesXLS(root) {
       property.rentalType === 'rooms' ? 'Por Habitaciones' : 'Alquiler Completo',
       property.availableRooms || 1,
       (property.monthlyRent || 0).toString().replace('.', ','),
+      yearlyConfig || 'Sin configuración anual',
+      banksList || 'No especificado',
       roomDetails,
       totalInvestment.toString().replace('.', ','),
       grossYield.toFixed(2).replace('.', ','),
@@ -421,7 +443,92 @@ function exportPropertiesXLS(root) {
   
   const csvContent = csvRows.join('\n');
   downloadFile(csvContent, 'propiedades.csv', 'text/csv');
-  root.querySelector('#exportResult').innerHTML = '<div style="color:green">✅ Propiedades exportadas a XLS (CSV)</div>';
+  root.querySelector('#exportResult').innerHTML = '<div style="color:green">✅ Propiedades exportadas a XLS (CSV) con configuración anual</div>';
+}
+
+function calculateYearlyRent(yearData) {
+  const monthlyRent = yearData.monthlyRent || 0;
+  const startMonth = yearData.startMonth || 1;
+  const endMonth = yearData.endMonth || 12;
+  const adjustments = yearData.adjustments || {};
+  
+  let totalAnnual = 0;
+  
+  for (let month = startMonth; month <= endMonth; month++) {
+    const monthlyAmount = adjustments[month] ? parseFloat(adjustments[month]) : monthlyRent;
+    totalAnnual += monthlyAmount;
+  }
+  
+  return totalAnnual;
+}
+
+function exportYearlyRentalsXLS(root) {
+  const properties = getProperties();
+  
+  if (properties.length === 0) {
+    root.querySelector('#exportResult').innerHTML = '<div style="color:orange">⚠️ No hay propiedades para exportar</div>';
+    return;
+  }
+  
+  const headers = [
+    'Propiedad ID', 'Dirección', 'Año', 'Renta Mensual Base', 'Banco de Recepción', 
+    'Mes Inicio', 'Mes Fin', 'Meses Activos', 'Renta Total Anual', 'Ajustes Mensuales'
+  ];
+  
+  const csvRows = [headers.join(';')];
+  
+  properties.forEach(property => {
+    if (property.yearlyRentals) {
+      Object.entries(property.yearlyRentals).forEach(([year, yearData]) => {
+        const totalYearlyRent = calculateYearlyRent(yearData);
+        const activeMonths = (yearData.endMonth || 12) - (yearData.startMonth || 1) + 1;
+        
+        // Format monthly adjustments
+        let adjustmentsText = '';
+        if (yearData.adjustments && Object.keys(yearData.adjustments).length > 0) {
+          const adjustmentEntries = Object.entries(yearData.adjustments).map(([month, amount]) => 
+            `Mes ${month}: ${fmtEUR(amount)}`
+          );
+          adjustmentsText = adjustmentEntries.join(' | ');
+        }
+        
+        const row = [
+          property.id || '',
+          property.address || '',
+          year,
+          (yearData.monthlyRent || 0).toString().replace('.', ','),
+          yearData.bank || 'No especificado',
+          yearData.startMonth || 1,
+          yearData.endMonth || 12,
+          activeMonths,
+          totalYearlyRent.toString().replace('.', ','),
+          adjustmentsText || 'Sin ajustes'
+        ];
+        
+        csvRows.push(row.join(';'));
+      });
+    } else {
+      // Add a row for properties without yearly configuration
+      const row = [
+        property.id || '',
+        property.address || '',
+        'Sin configuración',
+        (property.monthlyRent || 0).toString().replace('.', ','),
+        'No especificado',
+        1,
+        12,
+        12,
+        ((property.monthlyRent || 0) * 12).toString().replace('.', ','),
+        'Configuración base'
+      ];
+      
+      csvRows.push(row.join(';'));
+    }
+  });
+  
+  const csvContent = csvRows.join('\n');
+  downloadFile(csvContent, 'configuracion-rentas-anuales.csv', 'text/csv');
+  root.querySelector('#exportResult').innerHTML = '<div style="color:green">✅ Configuración anual de rentas exportada a XLS (CSV)</div>';
 }
 
 function exportOperatingCostsXLS(root) {
@@ -580,6 +687,23 @@ function exportCompleteDataXLS(root) {
 function exportPDF(root) {
   const properties = getProperties();
   
+  // Helper function to calculate yearly rent
+  function calculateYearlyRentLocal(yearData) {
+    const monthlyRent = yearData.monthlyRent || 0;
+    const startMonth = yearData.startMonth || 1;
+    const endMonth = yearData.endMonth || 12;
+    const adjustments = yearData.adjustments || {};
+    
+    let totalAnnual = 0;
+    
+    for (let month = startMonth; month <= endMonth; month++) {
+      const monthlyAmount = adjustments[month] ? parseFloat(adjustments[month]) : monthlyRent;
+      totalAnnual += monthlyAmount;
+    }
+    
+    return totalAnnual;
+  }
+  
   // Create a printable report
   const reportWindow = window.open('', '_blank');
   reportWindow.document.write(`
@@ -656,6 +780,21 @@ function exportPDF(root) {
                             <div>Rentabilidad Neta</div>
                         </div>
                     </div>
+                    ${property.yearlyRentals ? `
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                        <h4>📅 Configuración de Rentas por Año</h4>
+                        ${Object.entries(property.yearlyRentals).map(([year, yearData]) => {
+                          const totalYearlyRent = calculateYearlyRentLocal(yearData);
+                          return `
+                            <div style="margin: 5px 0;">
+                                <strong>${year}:</strong> ${fmtEUR(totalYearlyRent)} anual 
+                                (${fmtEUR(yearData.monthlyRent)} mensual) - 
+                                Banco: ${yearData.bank || 'No especificado'}
+                            </div>
+                          `;
+                        }).join('')}
+                    </div>
+                    ` : ''}
                 </div>
                 
                 ${property.rentalType === 'rooms' && property.rooms ? `
