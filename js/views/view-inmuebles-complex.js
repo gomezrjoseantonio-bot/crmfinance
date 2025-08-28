@@ -264,11 +264,23 @@ function renderProfitabilityAnalysis(property) {
   const totalNetSincePurchase = monthlyNet * monthsSincePurchase;
   
   return `
+    <div style="margin-bottom:15px;">
+      <label for="analysis-year-${property.id}" class="small muted">Año para Análisis de Presupuesto:</label>
+      <select id="analysis-year-${property.id}" style="width:120px; margin-left:10px;" onchange="updateProfitabilityAnalysis('${property.id}')">
+        ${Array.from({length: 5}, (_, i) => {
+          const year = new Date().getFullYear() + i - 1;
+          const selected = year === new Date().getFullYear() ? 'selected' : '';
+          return `<option value="${year}" ${selected}>${year}</option>`;
+        }).join('')}
+      </select>
+    </div>
+    
     <div class="row" style="margin-bottom:15px;">
       <div class="col">
         <h3 style="margin:0 0 10px 0; color:var(--accent);">💰 Ingresos Mensuales</h3>
         <div class="kpi" style="font-size:18px;">${fmtEUR(monthlyRent)}</div>
         <div class="small muted">Anual: ${fmtEUR(annualRent)}</div>
+        ${property.rentalType === 'rooms' && property.rooms ? renderRoomsProfitability(property) : ''}
       </div>
       <div class="col">
         <h3 style="margin:0 0 10px 0; color:var(--accent);">📉 Gastos Mensuales</h3>
@@ -289,6 +301,8 @@ function renderProfitabilityAnalysis(property) {
         <div><strong>Neta:</strong> ${netYield.toFixed(2)}%</div>
       </div>
     </div>
+    
+    ${property.rentalType === 'rooms' && property.rooms ? renderDetailedRoomAnalysis(property, monthlyOperatingCosts, monthlyFinancingCosts, totalInvestment) : ''}
     
     <div class="row">
       <div class="col">
@@ -460,6 +474,97 @@ function renderCostsSummary(costs) {
     ${summaryItems.join('')}
     <div style="margin-top:10px; font-weight:bold; color:#7c3aed;">
       <strong>Total Anual: ${fmtEUR(totalAnnual)}</strong>
+    </div>
+  `;
+}
+
+function renderRoomsProfitability(property) {
+  const rooms = property.rooms || [];
+  const totalRent = rooms.reduce((sum, room) => sum + (parseFloat(room.rent) || 0), 0);
+  const occupiedRooms = rooms.filter(room => room.occupied);
+  const occupiedRent = occupiedRooms.reduce((sum, room) => sum + (parseFloat(room.rent) || 0), 0);
+  
+  return `
+    <div style="margin-top:10px; padding:10px; background:#f9f9f9; border-radius:5px;">
+      <div class="small"><strong>Desglose por habitaciones:</strong></div>
+      <div class="small">Potencial: ${fmtEUR(totalRent)} | Actual: ${fmtEUR(occupiedRent)}</div>
+      <div class="small">Ocupación: ${occupiedRooms.length}/${rooms.length} habitaciones (${((occupiedRooms.length/rooms.length)*100).toFixed(1)}%)</div>
+    </div>
+  `;
+}
+
+function renderDetailedRoomAnalysis(property, monthlyOperatingCosts, monthlyFinancingCosts, totalInvestment) {
+  const rooms = property.rooms || [];
+  if (rooms.length === 0) return '';
+  
+  // Distribute costs proportionally among rooms based on rent
+  const totalRent = rooms.reduce((sum, room) => sum + (parseFloat(room.rent) || 0), 0);
+  
+  return `
+    <div class="row" style="margin-top:20px;">
+      <div class="col"><div class="card">
+        <h3 style="margin-top:0;">🏠 Análisis Detallado por Habitación</h3>
+        
+        <div class="grid">
+          <table>
+            <thead>
+              <tr>
+                <th>Habitación</th>
+                <th>Alquiler Mensual</th>
+                <th>Estado</th>
+                <th>Gastos Asignados</th>
+                <th>Beneficio Mensual</th>
+                <th>Rentabilidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rooms.map(room => {
+                const roomRent = parseFloat(room.rent) || 0;
+                const roomProportion = totalRent > 0 ? roomRent / totalRent : 1 / rooms.length;
+                const roomOperatingCosts = monthlyOperatingCosts * roomProportion;
+                const roomFinancingCosts = monthlyFinancingCosts * roomProportion;
+                const roomTotalCosts = roomOperatingCosts + roomFinancingCosts;
+                const roomNet = room.occupied ? roomRent - roomTotalCosts : -roomTotalCosts;
+                const roomInvestment = totalInvestment * roomProportion;
+                const roomYield = roomInvestment > 0 && room.occupied ? ((roomRent * 12) / roomInvestment * 100) : 0;
+                
+                return `
+                  <tr>
+                    <td><strong>${room.name || 'Sin nombre'}</strong></td>
+                    <td>${fmtEUR(roomRent)}</td>
+                    <td style="color:${room.occupied ? 'green' : 'orange'}">${room.occupied ? '✅ Ocupada' : '⚠️ Libre'}</td>
+                    <td>${fmtEUR(roomTotalCosts)}</td>
+                    <td style="color:${roomNet >= 0 ? 'green' : 'red'}">${fmtEUR(roomNet)}</td>
+                    <td>${roomYield.toFixed(2)}%</td>
+                  </tr>
+                `;
+              }).join('')}
+              <tr style="border-top:2px solid #ddd; font-weight:bold;">
+                <td>TOTAL</td>
+                <td>${fmtEUR(totalRent)}</td>
+                <td>${rooms.filter(r => r.occupied).length}/${rooms.length}</td>
+                <td>${fmtEUR(monthlyOperatingCosts + monthlyFinancingCosts)}</td>
+                <td style="color:${(totalRent - monthlyOperatingCosts - monthlyFinancingCosts) >= 0 ? 'green' : 'red'}">${fmtEUR(totalRent - monthlyOperatingCosts - monthlyFinancingCosts)}</td>
+                <td>${totalInvestment > 0 ? ((totalRent * 12) / totalInvestment * 100).toFixed(2) : 0}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-top:15px; padding:10px; background:#e8f4fd; border-radius:5px;">
+          <h4 style="margin:0 0 10px 0;">📊 Optimización de Ingresos</h4>
+          <div class="row">
+            <div class="col">
+              <div><strong>Potencial máximo:</strong> ${fmtEUR(totalRent)} mensual</div>
+              <div><strong>Ingresos actuales:</strong> ${fmtEUR(rooms.filter(r => r.occupied).reduce((sum, room) => sum + (parseFloat(room.rent) || 0), 0))} mensual</div>
+            </div>
+            <div class="col">
+              <div><strong>Habitaciones libres:</strong> ${rooms.filter(r => !r.occupied).length}</div>
+              <div><strong>Pérdida potencial:</strong> ${fmtEUR(rooms.filter(r => !r.occupied).reduce((sum, room) => sum + (parseFloat(room.rent) || 0), 0))} mensual</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
     </div>
   `;
 }
@@ -794,6 +899,22 @@ const view = {
         const checkbox = root.querySelector(`#cost-${costId}-month-${i}`);
         if (checkbox) checkbox.checked = selectAll;
       }
+    };
+    
+    // Year selection for budget analysis
+    window.updateProfitabilityAnalysis = (propertyId) => {
+      const properties = getProperties();
+      const property = properties.find(p => p.id === propertyId);
+      if (!property) return;
+      
+      const selectedYear = parseInt(root.querySelector(`#analysis-year-${propertyId}`).value);
+      
+      // Here you would integrate with budget/forecast system to get projected data for the selected year
+      // For now, we'll just refresh the current analysis
+      showPropertyDetails(property, root);
+      
+      // Future implementation: Update the analysis with year-specific budget data
+      console.log(`Análisis actualizado para el año ${selectedYear} de la propiedad ${propertyId}`);
     };
   }
 };
