@@ -38,6 +38,7 @@ function renderLoansList(loans, accounts, properties) {
                 <td>${loan.active ? '✅ Activo' : '⏸️ Pausado'}</td>
                 <td>
                   <button onclick="viewLoanDetails('${loan.id}')" style="font-size:12px">👁️ Ver</button>
+                  <button onclick="calculatePartialAmortization('${loan.id}')" style="font-size:12px">🧮 Amortizar</button>
                   <button onclick="editLoan('${loan.id}')" style="font-size:12px">✏️ Editar</button>
                   <button onclick="deleteLoan('${loan.id}')" style="font-size:12px; color:red">🗑️</button>
                 </td>
@@ -87,7 +88,7 @@ function renderLoanForm(accounts, properties) {
       <div class="row">
         <div class="col">
           <label class="small muted">Capital inicial (€) *</label><br/>
-          <input type="number" id="principal" step="1000" min="1000" required style="width:100%; margin-bottom:10px">
+          <input type="number" id="principal" step="0.01" min="1" required style="width:100%; margin-bottom:10px">
         </div>
         <div class="col">
           <label class="small muted">Tipo de interés anual (%) *</label><br/>
@@ -175,7 +176,7 @@ function renderConditionsForm() {
         </div>
         <div class="col">
           <label class="small muted">Bonificación (%)</label><br/>
-          <input type="number" id="${condition.id}_bonus" step="0.01" max="${condition.maxBonus}" min="0" style="width:80px" disabled>
+          <input type="number" id="${condition.id}_bonus" step="0.01" min="0" style="width:80px" disabled>
         </div>
         <div class="col">
           <label class="small muted">Requerimiento</label><br/>
@@ -191,11 +192,11 @@ function renderSimulator() {
     <div class="row">
       <div class="col">
         <label class="small muted">Capital (€)</label><br/>
-        <input type="number" id="simPrincipal" value="200000" step="1000" style="width:140px">
+        <input type="number" id="simPrincipal" value="200000" step="0.01" style="width:140px">
       </div>
       <div class="col">
         <label class="small muted">Tipo anual (%)</label><br/>
-        <input type="number" id="simRate" value="3.5" step="0.1" style="width:100px">
+        <input type="number" id="simRate" value="3.5" step="0.01" style="width:100px">
       </div>
       <div class="col">
         <label class="small muted">Años</label><br/>
@@ -255,8 +256,11 @@ const view = {
       <div class="row">
         <div class="col">
           <div class="card">
-            <h2>💰 Simulador de préstamo</h2>
-            ${renderSimulator()}
+            <h2>💰 Calculadora de préstamos</h2>
+            <button id="toggleSimulator" class="primary" style="margin-bottom:15px">🧮 Mostrar calculadora</button>
+            <div id="simulatorContent" style="display:none">
+              ${renderSimulator()}
+            </div>
           </div>
         </div>
       </div>
@@ -276,6 +280,22 @@ function setupEventHandlers(root) {
     loanForm.onsubmit = (e) => {
       e.preventDefault();
       saveLoan(root);
+    };
+  }
+  
+  // Simulator toggle
+  const toggleBtn = root.querySelector('#toggleSimulator');
+  const simulatorContent = root.querySelector('#simulatorContent');
+  if (toggleBtn && simulatorContent) {
+    toggleBtn.onclick = () => {
+      const isVisible = simulatorContent.style.display !== 'none';
+      simulatorContent.style.display = isVisible ? 'none' : 'block';
+      toggleBtn.textContent = isVisible ? '🧮 Mostrar calculadora' : '❌ Ocultar calculadora';
+      
+      // Calculate initial simulation when showing
+      if (!isVisible) {
+        setTimeout(() => calculateSimulation(root), 100);
+      }
     };
   }
   
@@ -309,9 +329,6 @@ function setupEventHandlers(root) {
       };
     }
   });
-  
-  // Calculate initial simulation
-  calculateSimulation(root);
 }
 
 // Global functions for onclick handlers
@@ -355,6 +372,14 @@ window.deleteLoan = function(loanId) {
   
   // Refresh the view
   view.mount(document.getElementById('app'));
+};
+
+window.calculatePartialAmortization = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  showPartialAmortizationCalculator(loan);
 };
 
 function saveLoan(root) {
@@ -719,5 +744,218 @@ function simulateEarlyPayment(root) {
     Plazo reducido: ${12 + newSchedule.length} meses (vs ${originalSchedule.length} original)
   `);
 }
+
+function showPartialAmortizationCalculator(loan) {
+  const detailsContainer = document.querySelector('#loanDetails');
+  detailsContainer.style.display = 'block';
+  
+  // Calculate current loan schedule
+  const originalSchedule = calculateFrenchAmortization(loan.principal, loan.effectiveRate / 100, loan.years);
+  const monthlyPayment = originalSchedule.length > 0 ? originalSchedule[0].payment : 0;
+  
+  detailsContainer.innerHTML = `
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h2>🧮 Calculadora de Amortización - ${loan.description}</h2>
+          
+          <div class="row">
+            <div class="col">
+              <h3>📊 Datos actuales del préstamo</h3>
+              <div><strong>Capital pendiente:</strong> ${fmtEUR(loan.principal)}</div>
+              <div><strong>Cuota actual:</strong> ${fmtEUR(monthlyPayment)}</div>
+              <div><strong>Tipo efectivo:</strong> ${loan.effectiveRate.toFixed(2)}%</div>
+              <div><strong>Meses restantes:</strong> ${originalSchedule.length}</div>
+            </div>
+          </div>
+          
+          <div style="margin-top:20px; border:1px solid var(--border); border-radius:8px; padding:15px">
+            <h3>💰 Simular Amortización Anticipada</h3>
+            
+            <div class="row">
+              <div class="col">
+                <label class="small muted">Importe a amortizar (€)</label><br/>
+                <input type="number" id="extraAmount" step="0.01" min="1" style="width:150px" placeholder="10000">
+              </div>
+              <div class="col">
+                <label class="small muted">¿En qué mes amortizar?</label><br/>
+                <input type="number" id="monthToAmortize" min="1" max="${originalSchedule.length}" value="12" style="width:100px">
+              </div>
+              <div class="col">
+                <label class="small muted">Tipo de amortización</label><br/>
+                <select id="amortizationType" style="width:180px">
+                  <option value="reduce_term">Reducir plazo</option>
+                  <option value="reduce_payment">Reducir cuota</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style="margin-top:15px">
+              <button onclick="calculatePartialAmortizationResults('${loan.id}')" class="primary">🧮 Calcular</button>
+              <button onclick="calculateTotalCancellation('${loan.id}')" style="margin-left:10px">🏁 Cancelación total</button>
+              <button onclick="document.querySelector('#loanDetails').style.display='none'" style="margin-left:10px">❌ Cerrar</button>
+            </div>
+            
+            <div id="amortizationResults" style="margin-top:15px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  detailsContainer.scrollIntoView({ behavior: 'smooth' });
+}
+
+window.calculatePartialAmortizationResults = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  const extraAmount = parseFloat(document.querySelector('#extraAmount').value);
+  const monthToAmortize = parseInt(document.querySelector('#monthToAmortize').value);
+  const amortizationType = document.querySelector('#amortizationType').value;
+  
+  if (!extraAmount || extraAmount <= 0) {
+    alert('Introduce un importe válido para amortizar');
+    return;
+  }
+  
+  if (!monthToAmortize || monthToAmortize <= 0) {
+    alert('Introduce un mes válido');
+    return;
+  }
+  
+  // Calculate original schedule
+  const originalSchedule = calculateFrenchAmortization(loan.principal, loan.effectiveRate / 100, loan.years);
+  
+  if (monthToAmortize > originalSchedule.length) {
+    alert('El mes especificado supera la duración del préstamo');
+    return;
+  }
+  
+  // Get balance at the specified month
+  const balanceAtMonth = originalSchedule[monthToAmortize - 1].balance;
+  const newBalance = balanceAtMonth - extraAmount;
+  
+  if (newBalance <= 0) {
+    document.querySelector('#amortizationResults').innerHTML = `
+      <div style="background:var(--success); color:white; padding:15px; border-radius:8px">
+        <h3>🎉 ¡Préstamo cancelado completamente!</h3>
+        <p>Con ${fmtEUR(extraAmount)} en el mes ${monthToAmortize}, cancelas toda la deuda restante.</p>
+        <p><strong>Ahorro total:</strong> ${fmtEUR(originalSchedule.slice(monthToAmortize).reduce((sum, p) => sum + p.interest, 0))}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Calculate new schedule after partial amortization
+  const remainingMonths = originalSchedule.length - monthToAmortize;
+  const newSchedule = calculateFrenchAmortization(newBalance, loan.effectiveRate / 100, remainingMonths / 12);
+  
+  // Calculate savings
+  const originalInterestAfterMonth = originalSchedule.slice(monthToAmortize).reduce((sum, p) => sum + p.interest, 0);
+  const newInterestAfterMonth = newSchedule.reduce((sum, p) => sum + p.interest, 0);
+  const interestSavings = originalInterestAfterMonth - newInterestAfterMonth;
+  
+  let resultsHTML = '';
+  
+  if (amortizationType === 'reduce_term') {
+    // Reduce term: keep same payment but reduce duration
+    const newDuration = newSchedule.length;
+    const monthsReduced = remainingMonths - newDuration;
+    
+    resultsHTML = `
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:15px">
+        <h3>📉 Resultado: Reducir plazo</h3>
+        <div class="row">
+          <div class="col">
+            <div class="small muted">Cuota mensual</div>
+            <div><strong>${fmtEUR(newSchedule[0]?.payment || 0)}</strong> (igual)</div>
+          </div>
+          <div class="col">
+            <div class="small muted">Plazo reducido</div>
+            <div><strong>${monthsReduced} meses</strong> (${(monthsReduced/12).toFixed(1)} años)</div>
+          </div>
+          <div class="col">
+            <div class="small muted">Ahorro en intereses</div>
+            <div style="color:green; font-weight:bold">${fmtEUR(interestSavings)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px; font-size:14px; color:var(--muted)">
+          Nueva duración total: ${monthToAmortize + newDuration} meses (vs ${originalSchedule.length} original)
+        </div>
+      </div>
+    `;
+  } else {
+    // Reduce payment: calculate what the new payment would be with same term
+    const newScheduleKeepTerm = calculateFrenchAmortization(newBalance, loan.effectiveRate / 100, remainingMonths / 12);
+    const newPayment = newScheduleKeepTerm[0]?.payment || 0;
+    const originalPayment = originalSchedule[0].payment;
+    const paymentReduction = originalPayment - newPayment;
+    
+    resultsHTML = `
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:15px">
+        <h3>💰 Resultado: Reducir cuota</h3>
+        <div class="row">
+          <div class="col">
+            <div class="small muted">Nueva cuota mensual</div>
+            <div><strong>${fmtEUR(newPayment)}</strong></div>
+          </div>
+          <div class="col">
+            <div class="small muted">Reducción mensual</div>
+            <div style="color:green; font-weight:bold">-${fmtEUR(paymentReduction)}</div>
+          </div>
+          <div class="col">
+            <div class="small muted">Ahorro en intereses</div>
+            <div style="color:green; font-weight:bold">${fmtEUR(interestSavings)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px; font-size:14px; color:var(--muted)">
+          Duración: ${remainingMonths} meses restantes (igual plazo)
+        </div>
+      </div>
+    `;
+  }
+  
+  document.querySelector('#amortizationResults').innerHTML = resultsHTML;
+};
+
+window.calculateTotalCancellation = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  const monthToCancel = parseInt(document.querySelector('#monthToAmortize').value) || 12;
+  
+  // Calculate original schedule
+  const originalSchedule = calculateFrenchAmortization(loan.principal, loan.effectiveRate / 100, loan.years);
+  
+  if (monthToCancel > originalSchedule.length) {
+    alert('El mes especificado supera la duración del préstamo');
+    return;
+  }
+  
+  const balanceAtMonth = originalSchedule[monthToCancel - 1].balance;
+  const remainingInterest = originalSchedule.slice(monthToCancel).reduce((sum, p) => sum + p.interest, 0);
+  
+  document.querySelector('#amortizationResults').innerHTML = `
+    <div style="background:var(--warning); color:white; padding:15px; border-radius:8px">
+      <h3>🏁 Cancelación total en el mes ${monthToCancel}</h3>
+      <div class="row">
+        <div class="col">
+          <div class="small" style="opacity:0.9">Importe para cancelar</div>
+          <div style="font-size:20px; font-weight:bold">${fmtEUR(balanceAtMonth)}</div>
+        </div>
+        <div class="col">
+          <div class="small" style="opacity:0.9">Ahorro en intereses</div>
+          <div style="font-size:18px; font-weight:bold">${fmtEUR(remainingInterest)}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:14px; opacity:0.9">
+        Te ahorrarías ${originalSchedule.length - monthToCancel} cuotas restantes
+      </div>
+    </div>
+  `;
+};
 
 export default view;
