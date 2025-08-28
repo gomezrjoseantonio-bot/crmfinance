@@ -453,7 +453,7 @@ const view = {
                       return `<option value="${month}" ${selected}>${monthNames[i]}</option>`;
                     }).join('')}
                   </select>
-                  <input type="number" id="variablePercent1" value="${nomina.salary.variableDistribution.month1 || 40}" min="0" max="100" style="width:60px; margin-left:10px">%
+                  <input type="number" id="variablePercent1" value="${nomina.salary.variableDistribution.month1 || 40}" min="0" style="width:60px; margin-left:10px">%
                 </div>
                 <div class="col">
                   <label class="small muted">Mes pago variable 2</label><br/>
@@ -465,8 +465,12 @@ const view = {
                       return `<option value="${month}" ${selected}>${monthNames[i]}</option>`;
                     }).join('')}
                   </select>
-                  <input type="number" id="variablePercent2" value="${nomina.salary.variableDistribution.month2 || 60}" min="0" max="100" style="width:60px; margin-left:10px">%
+                  <input type="number" id="variablePercent2" value="${nomina.salary.variableDistribution.month2 || 60}" min="0" style="width:60px; margin-left:10px">%
                 </div>
+              </div>
+              <div class="small muted" style="margin-top:8px">
+                Los porcentajes no necesariamente deben sumar 100%. Puede ser menos si no se alcanzan objetivos o más si se superan.
+                <span id="totalVariablePercent">Total: ${(nomina.salary.variableDistribution.month1 || 40) + (nomina.salary.variableDistribution.month2 || 60)}%</span>
               </div>
             </div>
           </div>
@@ -776,6 +780,17 @@ const view = {
         view.mount(root);
       }
     };
+    
+    // Update total variable percentage display when values change
+    const updateTotalVariablePercent = () => {
+      const percent1 = parseFloat(root.querySelector('#variablePercent1').value) || 0;
+      const percent2 = parseFloat(root.querySelector('#variablePercent2').value) || 0;
+      const total = percent1 + percent2;
+      root.querySelector('#totalVariablePercent').textContent = `Total: ${total.toFixed(1)}%`;
+    };
+    
+    root.querySelector('#variablePercent1').oninput = updateTotalVariablePercent;
+    root.querySelector('#variablePercent2').oninput = updateTotalVariablePercent;
   }
 };
 
