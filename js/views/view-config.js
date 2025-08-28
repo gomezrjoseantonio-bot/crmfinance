@@ -1,4 +1,4 @@
-import { getSettings, setSettings, getAccounts, saveAccounts, setYear, getYear, applyTheme } from '../storage.js';
+import { getSettings, setSettings, getAccounts, saveAccounts, setYear, getYear, applyTheme, getCategories, saveCategories } from '../storage.js';
 
 const view = {
   route:'#/config', title:'Configuración',
@@ -36,9 +36,27 @@ const view = {
             </div>
           </div>
         </div>
+        <div class="row" style="margin-top:16px">
+          <div class="col">
+            <h2>Categorías</h2>
+            <div class="grid"><table id="cat"><thead><tr><th>ID</th><th>Nombre</th><th>Color</th><th>Tipo</th><th></th></tr></thead><tbody></tbody></table></div>
+            <div style="margin-top:6px">
+              <input placeholder="ID" id="catId" style="width:90px">
+              <input placeholder="Nombre" id="catName" style="width:120px">
+              <input placeholder="#COLOR" id="catColor" style="width:80px">
+              <select id="catType" style="width:90px">
+                <option value="income">Ingreso</option>
+                <option value="expense">Gasto</option>
+              </select>
+              <button id="addCat" class="primary">Añadir</button>
+            </div>
+          </div>
+        </div>
       </div></div>
     </div>`;
     const tbody = root.querySelector('#acct tbody');
+    const catTbody = root.querySelector('#cat tbody');
+    
     function draw(){
       const a = getAccounts();
       tbody.innerHTML = a.map((r,i)=>`<tr><td>${r.id}</td><td>${r.name}</td><td>${r.threshold}</td>
@@ -48,7 +66,20 @@ const view = {
         const arr = getAccounts(); arr.splice(idx,1); saveAccounts(arr); draw();
       });
     }
+    
+    function drawCategories(){
+      const cats = getCategories();
+      catTbody.innerHTML = cats.map((r,i)=>`<tr><td>${r.id}</td><td>${r.name}</td>
+      <td><span style="color:${r.color}">${r.color}</span></td><td>${r.type==='income'?'Ingreso':'Gasto'}</td>
+      <td><button data-i="${i}" class="delCat">Borrar</button></td></tr>`).join('');
+      catTbody.querySelectorAll('.delCat').forEach(b=> b.onclick = ()=>{
+        const idx = +b.getAttribute('data-i');
+        const arr = getCategories(); arr.splice(idx,1); saveCategories(arr); drawCategories();
+      });
+    }
+    
     draw();
+    drawCategories();
 
     root.querySelector('#add').onclick = ()=>{
       const id = root.querySelector('#id').value.trim();
@@ -57,6 +88,16 @@ const view = {
       if(!id || !name) return;
       const arr = getAccounts(); arr.push({id, name, threshold:thr}); saveAccounts(arr); draw();
       root.querySelector('#id').value=''; root.querySelector('#name').value=''; root.querySelector('#thr').value='';
+    };
+    
+    root.querySelector('#addCat').onclick = ()=>{
+      const id = root.querySelector('#catId').value.trim();
+      const name = root.querySelector('#catName').value.trim();
+      const color = root.querySelector('#catColor').value.trim();
+      const type = root.querySelector('#catType').value;
+      if(!id || !name || !color) return;
+      const arr = getCategories(); arr.push({id, name, color, type}); saveCategories(arr); drawCategories();
+      root.querySelector('#catId').value=''; root.querySelector('#catName').value=''; root.querySelector('#catColor').value='';
     };
     root.querySelector('#apply').onclick = ()=>{
       const theme = root.querySelector('#theme').value;
