@@ -153,6 +153,33 @@ export function saveProperties(properties,y=getYear()){ LS.setItem(PROPERTIES_KE
 export function getLoans(y=getYear()){ return JSON.parse(LS.getItem(LOANS_KEY(y))||'[]'); }
 export function saveLoans(loans,y=getYear()){ LS.setItem(LOANS_KEY(y), JSON.stringify(loans)); }
 
+// Clear income and expense data functions
+export function clearAllIncomeExpenseData() {
+  // Clear all years of transaction data
+  const currentYear = new Date().getFullYear();
+  for (let year = currentYear - 10; year <= currentYear + 10; year++) {
+    LS.removeItem(REAL_KEY(year));
+    LS.removeItem(FORECAST_KEY(year));
+    LS.removeItem(PMA_KEY(year));
+    LS.removeItem(PROPERTIES_KEY(year));
+    LS.removeItem(LOANS_KEY(year));
+  }
+  // Clear recurring transactions
+  LS.removeItem(RECURRENCES_KEY);
+}
+
+export function clearDataForYear(year) {
+  LS.removeItem(REAL_KEY(year));
+  LS.removeItem(FORECAST_KEY(year));
+  LS.removeItem(PMA_KEY(year));
+  LS.removeItem(PROPERTIES_KEY(year));
+  LS.removeItem(LOANS_KEY(year));
+}
+
+export function clearRealTransactions(year = getYear()) {
+  LS.removeItem(REAL_KEY(year));
+}
+
 export function getBudgetAlerts(y = getYear()) {
   const rows = getReal(y);
   const budgets = getBudgets();

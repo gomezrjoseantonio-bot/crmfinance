@@ -176,4 +176,84 @@ describe('Storage Functions', () => {
       assert.equal(accountAlert.accountId, 'TEST');
     });
   });
+
+  describe('Data Clearing Functions', () => {
+    beforeEach(() => {
+      // Set up test data for multiple years
+      const testData2023 = [
+        { date: '2023-01-01', bank: 'TEST', concept: 'Test 2023', amount: 100, category: 'test' }
+      ];
+      const testData2024 = [
+        { date: '2024-01-01', bank: 'TEST', concept: 'Test 2024', amount: 200, category: 'test' }
+      ];
+      
+      saveReal(testData2023, 2023);
+      saveReal(testData2024, 2024);
+      saveForecast([{ amount: 1000, date: '2024-01-01' }], 2024);
+      savePMA({ budget: 10000 }, 2024);
+      saveRecurrences([{ type: 'INCOME', concept: 'Salary', amount: 3000 }]);
+      saveProperties([{ id: 1, name: 'Test Property' }], 2024);
+      saveLoans([{ id: 1, amount: 50000 }], 2024);
+    });
+
+    it('should clear real transactions for specific year', () => {
+      clearRealTransactions(2024);
+      
+      // 2024 should be cleared
+      assert.deepEqual(getReal(2024), []);
+      
+      // 2023 should remain
+      assert.equal(getReal(2023).length, 1);
+      assert.equal(getReal(2023)[0].concept, 'Test 2023');
+    });
+
+    it('should clear all data for specific year', () => {
+      clearDataForYear(2024);
+      
+      // All 2024 data should be cleared
+      assert.deepEqual(getReal(2024), []);
+      assert.deepEqual(getForecast(2024), []);
+      assert.deepEqual(getPMA(2024), {});
+      assert.deepEqual(getProperties(2024), []);
+      assert.deepEqual(getLoans(2024), []);
+      
+      // 2023 should remain
+      assert.equal(getReal(2023).length, 1);
+      
+      // Recurrences should remain (they're not year-specific)
+      assert.equal(getRecurrences().length, 1);
+    });
+
+    it('should clear all income and expense data across all years', () => {
+      clearAllIncomeExpenseData();
+      
+      // All data should be cleared
+      assert.deepEqual(getReal(2023), []);
+      assert.deepEqual(getReal(2024), []);
+      assert.deepEqual(getForecast(2024), []);
+      assert.deepEqual(getPMA(2024), {});
+      assert.deepEqual(getRecurrences(), []);
+      assert.deepEqual(getProperties(2024), []);
+      assert.deepEqual(getLoans(2024), []);
+    });
+
+    it('should preserve configuration data when clearing', () => {
+      // Add some configuration
+      const testAccounts = [{ id: 'TEST', name: 'Test Bank' }];
+      const testCategories = [{ id: 'test', name: 'Test Category' }];
+      const testBudgets = [{ categoryId: 'test', monthlyLimit: 500 }];
+      
+      saveAccounts(testAccounts);
+      saveCategories(testCategories);
+      saveBudgets(testBudgets);
+      
+      // Clear all data
+      clearAllIncomeExpenseData();
+      
+      // Configuration should be preserved
+      assert.deepEqual(getAccounts(), testAccounts);
+      assert.deepEqual(getCategories(), testCategories);
+      assert.deepEqual(getBudgets(), testBudgets);
+    });
+  });
 });
