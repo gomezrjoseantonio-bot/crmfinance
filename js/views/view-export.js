@@ -1,4 +1,4 @@
-import { saveReal, getReal, getYear, getRecurrences, saveRecurrences, getPMA, savePMA, getProperties, saveProperties, getBudgets, saveBudgets, getCategories } from '../storage.js';
+import { saveReal, getReal, getYear, getRecurrences, saveRecurrences, getPMA, savePMA, getProperties, saveProperties, getBudgets, saveBudgets, getCategories, clearAllIncomeExpenseData, clearDataForYear, clearRealTransactions } from '../storage.js';
 import { fmtEUR, parseEuro, groupBy } from '../utils.js';
 import { parseXLSX, parseXLS } from '../../vendor/xlsx-lite.js';
 
@@ -160,6 +160,20 @@ const view = {
             <button id="exportPDF">📄 Exportar PDF</button>
           </div>
           
+          <h3 style="margin-top:20px; margin-bottom:10px; color:#ef4444;">🗑️ Gestión de Datos</h3>
+          
+          <div style="margin:10px 0">
+            <button id="clearRealData" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">🧹 Limpiar transacciones reales año actual</button>
+          </div>
+          
+          <div style="margin:10px 0">
+            <button id="clearYearData" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">🗑️ Limpiar todos los datos año actual</button>
+          </div>
+          
+          <div style="margin:10px 0">
+            <button id="clearAllData" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">⚠️ LIMPIAR TODOS LOS INGRESOS Y GASTOS</button>
+          </div>
+          
           <div id="exportResult" style="margin-top:15px"></div>
         </div>
       </div>
@@ -281,6 +295,35 @@ const view = {
     root.querySelector('#exportCompleteDataXLS').onclick = () => exportCompleteDataXLS(root);
     root.querySelector('#exportPDF').onclick = () => {
       exportPDF(root);
+    };
+    
+    // Data clearing handlers
+    root.querySelector('#clearRealData').onclick = () => {
+      if (confirm('⚠️ ¿Estás seguro de que quieres eliminar todas las transacciones reales del año actual?\n\nEsta acción NO se puede deshacer.')) {
+        clearRealTransactions();
+        alert('✅ Transacciones reales del año actual eliminadas correctamente.');
+        // Refresh the view
+        view.mount(root);
+      }
+    };
+    
+    root.querySelector('#clearYearData').onclick = () => {
+      const currentYear = getYear();
+      if (confirm(`⚠️ ¿Estás seguro de que quieres eliminar TODOS los datos financieros del año ${currentYear}?\n\nEsto incluye:\n- Transacciones reales\n- Previsiones\n- Plan maestro anual\n- Datos de propiedades\n- Datos de préstamos\n\nEsta acción NO se puede deshacer.`)) {
+        clearDataForYear(currentYear);
+        alert('✅ Todos los datos financieros del año actual eliminados correctamente.');
+        // Refresh the view
+        view.mount(root);
+      }
+    };
+    
+    root.querySelector('#clearAllData').onclick = () => {
+      if (confirm('🚨 ADVERTENCIA: ¿Estás seguro de que quieres eliminar TODOS los ingresos y gastos de TODOS los años?\n\nEsto incluye:\n- Todas las transacciones reales (todos los años)\n- Todas las previsiones (todos los años)\n- Todo el plan maestro anual (todos los años)\n- Todas las recurrencias\n- Todos los datos de propiedades (todos los años)\n- Todos los datos de préstamos (todos los años)\n\nSe conservarán:\n- Configuración de cuentas\n- Categorías\n- Presupuestos\n- Configuración general\n\nEsta acción NO se puede deshacer.\n\nEscribe "CONFIRMAR" para continuar:') && prompt('Para confirmar, escribe "CONFIRMAR":') === 'CONFIRMAR') {
+        clearAllIncomeExpenseData();
+        alert('✅ Todos los datos de ingresos y gastos han sido eliminados.\n\nPuedes empezar a introducir datos reales.');
+        // Refresh the view
+        view.mount(root);
+      }
     };
     
     // Initialize charts
