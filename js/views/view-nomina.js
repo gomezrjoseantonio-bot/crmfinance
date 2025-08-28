@@ -61,7 +61,7 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
   
-  const monthlyBase = salaryConfig.grossAnnual / 12;
+  const monthlyBase = salaryConfig.grossAnnual / salaryConfig.numPayments;
   const monthlyDeductions = salaryData.totalDeductions / 12;
   
   return months.map((month, index) => {
