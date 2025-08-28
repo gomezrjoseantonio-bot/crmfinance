@@ -1,8 +1,11 @@
-import { getReal } from '../storage.js'; import { fmtEUR, groupBy } from '../utils.js';
+import { getReal, getCategories } from '../storage.js'; import { fmtEUR, groupBy } from '../utils.js';
 const view = {
   route:'#/mes', title:'Mes',
   async mount(root){
     const rows = getReal();
+    const categories = getCategories();
+    const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+    
     const byBank = groupBy(rows, r=>r.bank||'SIN_BANCO');
     const cards = Object.entries(byBank).map(([bank,items])=>{
       const inc = items.filter(x=>x.amount>0).reduce((a,b)=>a+b.amount,0);
@@ -10,7 +13,11 @@ const view = {
       const net = inc+out;
       const days = groupBy(items, r=>r.date);
       const details = Object.entries(days).sort(([a],[b])=>a.localeCompare(b)).map(([d,list])=>{
-        const s = list.map(l=>`<tr><td>${l.date}</td><td>${l.concept}</td><td style="text-align:right">${fmtEUR(l.amount)}</td></tr>`).join('');
+        const s = list.map(l=>{
+          const cat = catMap[l.category];
+          const catBadge = cat ? `<span class="badge" style="background:${cat.color};color:white;font-size:10px">${cat.name}</span>` : '';
+          return `<tr><td>${l.date}</td><td>${l.concept} ${catBadge}</td><td style="text-align:right">${fmtEUR(l.amount)}</td></tr>`;
+        }).join('');
         return s;
       }).join('');
       return `<div class="col"><div class="card">

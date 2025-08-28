@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finarí - Test Suite</title>
+  <link rel="stylesheet" href="../dist/app.css">
+  <style>
+    #test-output {
+      font-family: 'Monaco', 'Consolas', monospace;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 16px;
+      white-space: pre-wrap;
+      max-height: 500px;
+      overflow-y: auto;
+      margin: 16px 0;
+    }
+    .test-controls {
+      margin: 16px 0;
+    }
+    .test-stats {
+      display: flex;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      min-width: 80px;
+    }
+    .stat-number {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .stat-passed { color: #10b981; }
+    .stat-failed { color: #ef4444; }
+    .stat-total { color: #6b7280; }
+  </style>
+</head>
+<body class="theme-light">
+  <header class="topbar">
+    <div class="brand">
+      <img src="../assets/favicon.svg" alt="Finarí" class="logo"/>
+      <strong>Finarí</strong> <span class="muted">— Test Suite</span>
+    </div>
+    <nav class="menu">
+      <a href="../index.html" class="nav">← Volver a la App</a>
+    </nav>
+  </header>
+  
+  <main class="container">
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h1>🧪 Test Suite Automatizado</h1>
+          <p class="muted">Suite de pruebas para validar la funcionalidad del sistema financiero</p>
+          
+          <div class="test-controls">
+            <button id="run-tests" class="primary">▶️ Ejecutar Tests</button>
+            <button id="clear-output">🗑️ Limpiar</button>
+          </div>
+          
+          <div class="test-stats" id="test-stats" style="display: none;">
+            <div class="stat-card">
+              <div class="stat-number stat-passed" id="stat-passed">0</div>
+              <div class="small">Pasaron</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number stat-failed" id="stat-failed">0</div>
+              <div class="small">Fallaron</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number stat-total" id="stat-total">0</div>
+              <div class="small">Total</div>
+            </div>
+          </div>
+          
+          <div id="test-output"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h2>📋 Cobertura de Tests</h2>
+          <ul>
+            <li><strong>Utils Functions:</strong> Formato de moneda, parsing, agrupación, fechas</li>
+            <li><strong>Storage Functions:</strong> Configuración, cuentas, categorías, presupuestos</li>
+            <li><strong>Budget System:</strong> Alertas automáticas, violaciones de umbrales</li>
+            <li><strong>Data Validation:</strong> Transacciones, cálculos financieros</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <footer class="footer">
+    <span>Finarí · Sistema de Tests Automatizado</span>
+    <span class="muted">Validación de funcionalidad core</span>
+  </footer>
+
+  <!-- Load application modules for testing -->
+  <script type="module">
+    // Load test framework first
+    const testFrameworkModule = await import('./test-framework.js');
+    
+    // Make framework global
+    window.testFramework = testFrameworkModule.testFramework || window.testFramework;
+    window.describe = window.testFramework.describe.bind(window.testFramework);
+    window.it = window.testFramework.it.bind(window.testFramework);
+    window.beforeEach = window.testFramework.beforeEach.bind(window.testFramework);
+    window.afterEach = window.testFramework.afterEach.bind(window.testFramework);
+    window.assert = testFrameworkModule.Assert || window.assert;
+    
+    // Import modules to test
+    import * as utils from '../js/utils.js';
+    import * as storage from '../js/storage.js';
+    
+    // Make them globally available for tests
+    Object.assign(window, utils);
+    Object.assign(window, storage);
+    
+    // Load test files after framework is ready
+    await import('./utils.test.js');
+    await import('./storage.test.js');
+    
+    // Set up UI
+    document.getElementById('run-tests').onclick = async () => {
+      document.getElementById('run-tests').disabled = true;
+      document.getElementById('run-tests').textContent = '⏳ Ejecutando...';
+      
+      const results = await testFramework.run();
+      
+      // Update stats
+      document.getElementById('test-stats').style.display = 'flex';
+      document.getElementById('stat-passed').textContent = results.passed;
+      document.getElementById('stat-failed').textContent = results.failed;
+      document.getElementById('stat-total').textContent = results.total;
+      
+      document.getElementById('run-tests').disabled = false;
+      document.getElementById('run-tests').textContent = '▶️ Ejecutar Tests';
+    };
+    
+    document.getElementById('clear-output').onclick = () => {
+      document.getElementById('test-output').textContent = '';
+      document.getElementById('test-stats').style.display = 'none';
+    };
+    
+    // Auto-run tests on load
+    setTimeout(() => {
+      document.getElementById('run-tests').click();
+    }, 500);
+  </script>
+</body>
+</html>
