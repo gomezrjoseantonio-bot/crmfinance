@@ -16,6 +16,21 @@ const view = {
     const accounts = getAccounts();
     const year = getYear();
     
+    // Check accounts data integrity
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      console.warn('Accounts data is not properly loaded, using fallback');
+      accounts = [
+        {id:'SANTANDER', name:'Santander', threshold:200},
+        {id:'BBVA', name:'BBVA', threshold:200},
+        {id:'CAIXABANK', name:'CaixaBank', threshold:300},
+        {id:'BANKINTER', name:'Bankinter', threshold:250},
+        {id:'ING', name:'ING', threshold:150},
+        {id:'OPENBANK', name:'Openbank', threshold:100},
+        {id:'BANCO_SABADELL', name:'Banco Sabadell', threshold:200},
+        {id:'UNICAJA', name:'Unicaja', threshold:180}
+      ];
+    }
+    
     root.innerHTML = `
       <div class="row">
         <div class="col">
@@ -33,7 +48,7 @@ const view = {
                 <label class="small muted">Banco</label>
                 <select id="bankFilter" style="width: 200px;">
                   <option value="">Todos los bancos</option>
-                  ${accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                  ${accounts && Array.isArray(accounts) ? accounts.map(a => `<option value="${a.id || ''}">${a.name || a.id || 'Sin nombre'}</option>`).join('') : ''}
                 </select>
               </div>
               <button id="applyFilter" class="primary">Aplicar filtro</button>
