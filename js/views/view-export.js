@@ -16,22 +16,52 @@ function parseCSV(text){
 
 async function readFile(file){
   const name = file.name.toLowerCase();
-  if(name.endsWith('.csv')){
-    const text = await file.text();
-    const rows = parseCSV(text);
-    return rows.map(r=>({ raw:r }));
+  
+  try {
+    if(name.endsWith('.csv')){
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if (!rows || rows.length === 0) {
+        throw new Error('El archivo CSV no contiene datos válidos');
+      }
+      return rows.map(r=>({ raw:r }));
+    }
+    
+    if(name.endsWith('.xlsx')){
+      const rows = await parseXLSX(file); // returns array of arrays
+      if (!rows || rows.length === 0) {
+        throw new Error('El archivo XLSX no contiene datos válidos');
+      }
+      const head = rows.shift()||[];
+      return rows.map(r=>{ const o={}; head.forEach((h,i)=>o[h?.toString().trim().toLowerCase()]=r[i]); return {raw:o}; });
+    }
+    
+    if(name.endsWith('.xls')){
+      // Try HTML table format first (common with some bank exports)
+      let rows;
+      try {
+        rows = await parseXLS(file);
+      } catch (htmlError) {
+        // If HTML parsing fails, show helpful error message
+        throw new Error('Este archivo .xls no es compatible. Por favor, conviértelo a .xlsx o .csv desde Excel:\n' +
+                       '1. Abre el archivo en Excel\n' + 
+                       '2. Guarda como → Libro de Excel (.xlsx) o CSV\n' +
+                       '3. Vuelve a importar el archivo convertido');
+      }
+      
+      if (!rows || rows.length === 0) {
+        throw new Error('El archivo XLS no contiene datos válidos');
+      }
+      const head = rows.shift()||[];
+      return rows.map(r=>{ const o={}; head.forEach((h,i)=>o[h?.toString().trim().toLowerCase()]=r[i]); return {raw:o}; });
+    }
+    
+    throw new Error('Formato no soportado. Usa archivos .CSV, .XLS (exportados como HTML) o .XLSX');
+    
+  } catch (error) {
+    alert('❌ Error al leer el archivo:\n' + error.message);
+    throw error;
   }
-  if(name.endsWith('.xlsx')){
-    const rows = await parseXLSX(file); // returns array of arrays
-    const head = rows.shift()||[];
-    return rows.map(r=>{ const o={}; head.forEach((h,i)=>o[h?.toString().trim().toLowerCase()]=r[i]); return {raw:o}; });
-  }
-  if(name.endsWith('.xls')){
-    const rows = await parseXLS(file);
-    const head = rows.shift()||[];
-    return rows.map(r=>{ const o={}; head.forEach((h,i)=>o[h?.toString().trim().toLowerCase()]=r[i]); return {raw:o}; });
-  }
-  alert('Formato no soportado. Usa .CSV, .XLS o .XLSX'); return [];
 }
 
 const view = {
@@ -77,9 +107,15 @@ const view = {
             </select>
           </div>
           
-          <div style="margin:10px 0; display:flex; gap:10px; align-items:center;">
-            <input type="file" id="file" accept=".csv,.xls,.xlsx"/>
-            <button class="primary" id="load">📂 Cargar</button>
+          <div style="margin:10px 0; display:flex; gap:10px; align-items:center; flex-direction:column">
+            <div style="display:flex; gap:10px; align-items:center; width:100%">
+              <input type="file" id="file" accept=".csv,.xlsx,.xls" title="Formatos soportados: CSV, XLSX, XLS (exportado como HTML)"/>
+              <button class="primary" id="load">📂 Cargar</button>
+            </div>
+            <div class="small muted" style="text-align:center; max-width:500px">
+              📋 <strong>Formatos soportados:</strong> CSV, XLSX, XLS<br/>
+              💡 <strong>Tip:</strong> Si tu archivo .xls no funciona, ábrelo en Excel y guárdalo como .xlsx o .csv
+            </div>
           </div>
           
           <div id="importPreview" style="display:none; margin-top:15px">
@@ -186,21 +222,49 @@ const view = {
     
     root.querySelector('#load').onclick = async () => {
       const file = root.querySelector('#file').files[0];
-      if (!file) { alert('Selecciona un archivo'); return; }
+      if (!file) { 
+        alert('📁 Por favor, selecciona un archivo para importar'); 
+        return; 
+      }
+      
+      // Show loading feedback
+      const loadBtn = root.querySelector('#load');
+      const originalText = loadBtn.textContent;
+      loadBtn.textContent = '⏳ Cargando...';
+      loadBtn.disabled = true;
       
       try {
         currentData = await readFile(file);
         
         if (!currentData || currentData.length === 0) {
-          alert('No se pudieron leer datos del archivo');
-          return;
+          throw new Error('No se pudieron leer datos del archivo. Verifica que el archivo contenga datos válidos.');
         }
         
         currentHeaders = Object.keys(currentData[0].raw);
+        
+        if (currentHeaders.length === 0) {
+          throw new Error('El archivo no contiene columnas válidas. Verifica el formato del archivo.');
+        }
+        
         showImportPreview(root, currentData, currentHeaders);
         
       } catch (error) {
-        alert('Error al leer el archivo: ' + error.message);
+        console.error('Error loading file:', error);
+        
+        // Clear any existing preview
+        root.querySelector('#importPreview').style.display = 'none';
+        
+        // Show specific error message or fallback
+        let errorMessage = error.message || 'Error desconocido al procesar el archivo';
+        
+        // Don't show alert again if readFile already showed one
+        if (!errorMessage.includes('Error al leer el archivo')) {
+          alert('❌ ' + errorMessage);
+        }
+      } finally {
+        // Reset button state
+        loadBtn.textContent = originalText;
+        loadBtn.disabled = false;
       }
     };
     
