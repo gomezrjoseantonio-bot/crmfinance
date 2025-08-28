@@ -3,6 +3,10 @@ const year = new Date().getFullYear();
 const SETTINGS_KEY = 'fp-settings';
 const REAL_KEY = y => `fp-real-${y}`;
 const ACCOUNTS_KEY = 'fp-accounts';
+const PMA_KEY = y => `fp-pma-${y}`;
+const RECURRENCES_KEY = 'fp-recurrences';
+const FORECAST_KEY = y => `fp-forecast-${y}`;
+const TAXES_KEY = 'fp-taxes';
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -38,6 +42,34 @@ export function saveAccounts(arr){ LS.setItem(ACCOUNTS_KEY, JSON.stringify(arr))
 
 export function getReal(y=getYear()){ return JSON.parse(LS.getItem(REAL_KEY(y))||'[]'); }
 export function saveReal(rows,y=getYear()){ LS.setItem(REAL_KEY(y), JSON.stringify(rows)); }
+
+// Plan Maestro Anual (PMA)
+export function getPMA(y=getYear()){ return JSON.parse(LS.getItem(PMA_KEY(y))||'{}'); }
+export function savePMA(pma,y=getYear()){ LS.setItem(PMA_KEY(y), JSON.stringify(pma)); }
+
+// Recurrencias maestro
+export function getRecurrences(){ return JSON.parse(LS.getItem(RECURRENCES_KEY)||'[]'); }
+export function saveRecurrences(recurrences){ LS.setItem(RECURRENCES_KEY, JSON.stringify(recurrences)); }
+
+// Forecast
+export function getForecast(y=getYear()){ return JSON.parse(LS.getItem(FORECAST_KEY(y))||'[]'); }
+export function saveForecast(forecast,y=getYear()){ LS.setItem(FORECAST_KEY(y), JSON.stringify(forecast)); }
+
+// Tablas de IRPF y SS
+export function getTaxTables(){ 
+  return JSON.parse(LS.getItem(TAXES_KEY)||JSON.stringify({
+    irpf: [
+      {min: 0, max: 12450, rate: 0.19},
+      {min: 12450, max: 20200, rate: 0.24},
+      {min: 20200, max: 35200, rate: 0.30},
+      {min: 35200, max: 60000, rate: 0.37},
+      {min: 60000, max: 300000, rate: 0.47},
+      {min: 300000, max: Infinity, rate: 0.47}
+    ],
+    ss: {rate: 0.0635, max: 4495.50}
+  }));
+}
+export function saveTaxTables(tables){ LS.setItem(TAXES_KEY, JSON.stringify(tables)); }
 
 export function applyTheme(){
   const s=getSettings();
