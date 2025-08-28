@@ -3,7 +3,7 @@ import viewHoy from './views/view-hoy.js';
 import viewImportar from './views/view-importar.js';
 import viewMes from './views/view-mes.js';
 import viewConfig from './views/view-config.js';
-import viewInmuebles from './views/view-inmuebles.js';
+import viewInmuebles from './views/view-inmuebles-complex.js';
 
 const VIEWS = [viewHoy, viewImportar, viewMes, viewInmuebles, viewConfig];
 
