@@ -22,10 +22,16 @@ function calculateComprehensiveSalary(salaryConfig, taxTables, year) {
   let irpfContribution = 0;
   let accumulatedTax = 0;
   
-  for (const bracket of taxTables.irpf) {
-    if (taxableAnnual > bracket.min) {
-      const taxableInBracket = Math.min(taxableAnnual, bracket.max) - bracket.min;
-      irpfContribution += taxableInBracket * bracket.rate;
+  // Check if manual IRPF rate is specified
+  if (salaryConfig.manualIrpfRate && salaryConfig.manualIrpfRate > 0) {
+    irpfContribution = taxableAnnual * (salaryConfig.manualIrpfRate / 100);
+  } else {
+    // Use progressive tax brackets
+    for (const bracket of taxTables.irpf) {
+      if (taxableAnnual > bracket.min) {
+        const taxableInBracket = Math.min(taxableAnnual, bracket.max) - bracket.min;
+        irpfContribution += taxableInBracket * bracket.rate;
+      }
     }
   }
   
@@ -264,6 +270,7 @@ const view = {
     if (!nomina.salary.bonusMonth) nomina.salary.bonusMonth = 4;
     if (!nomina.salary.company) nomina.salary.company = '';
     if (!nomina.salary.socialBenefits) nomina.salary.socialBenefits = {};
+    if (!nomina.salary.manualIrpfRate) nomina.salary.manualIrpfRate = 0;
     
     if (!nomina.freelance) nomina.freelance = [];
     if (!nomina.company) nomina.company = [];
@@ -478,8 +485,17 @@ const view = {
             
             <div style="margin-top:15px">
               <h3>IRPF</h3>
-              <div class="small muted">Base: ${fmtEUR(salaryData.irpfBase)} · Tipo efectivo: ${(salaryData.irpfRate * 100).toFixed(2)}%</div>
-              <div><strong>${fmtEUR(salaryData.irpfContribution)}</strong></div>
+              <div class="row">
+                <div class="col">
+                  <label class="small muted">% IRPF manual (opcional)</label><br/>
+                  <input type="number" id="manualIrpfRate" value="${nomina.salary.manualIrpfRate || ''}" min="0" max="50" step="0.01" style="width:80px" placeholder="Auto">%
+                </div>
+                <div class="col">
+                  <div class="small muted">Base: ${fmtEUR(salaryData.irpfBase)} · Tipo efectivo: ${(salaryData.irpfRate * 100).toFixed(2)}%</div>
+                  <div><strong>${fmtEUR(salaryData.irpfContribution)}</strong></div>
+                </div>
+              </div>
+              <div class="small muted" style="margin-top:5px">Deja vacío para cálculo automático por tramos fiscales</div>
             </div>
             
             <div style="margin-top:15px">
@@ -632,6 +648,7 @@ const view = {
       nomina.salary.accountId = root.querySelector('#accountId').value;
       nomina.salary.solidarityFee = parseFloat(root.querySelector('#solidarityFee').value) || 0;
       nomina.salary.pensionPlan = parseFloat(root.querySelector('#pensionPlan').value) || 0;
+      nomina.salary.manualIrpfRate = parseFloat(root.querySelector('#manualIrpfRate').value) || 0;
       
       if (nomina.salary.numPayments === 14) {
         nomina.salary.extraPayMonths = [
