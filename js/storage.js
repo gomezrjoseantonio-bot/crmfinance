@@ -10,6 +10,7 @@ const RECURRENCES_KEY = 'fp-recurrences';
 const FORECAST_KEY = y => `fp-forecast-${y}`;
 const TAXES_KEY = 'fp-taxes';
 const PROPERTIES_KEY = y => `fp-properties-${y}`;
+const LOANS_KEY = y => `fp-loans-${y}`;
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -147,6 +148,10 @@ export function getCompanyLogo(companyName) {
 // Properties (Inmuebles)
 export function getProperties(y=getYear()){ return JSON.parse(LS.getItem(PROPERTIES_KEY(y))||'[]'); }
 export function saveProperties(properties,y=getYear()){ LS.setItem(PROPERTIES_KEY(y), JSON.stringify(properties)); }
+
+// Loans (Préstamos)
+export function getLoans(y=getYear()){ return JSON.parse(LS.getItem(LOANS_KEY(y))||'[]'); }
+export function saveLoans(loans,y=getYear()){ LS.setItem(LOANS_KEY(y), JSON.stringify(loans)); }
 
 export function getBudgetAlerts(y = getYear()) {
   const rows = getReal(y);
