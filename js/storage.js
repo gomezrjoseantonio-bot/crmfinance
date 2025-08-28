@@ -3,6 +3,7 @@ const year = new Date().getFullYear();
 const SETTINGS_KEY = 'fp-settings';
 const REAL_KEY = y => `fp-real-${y}`;
 const ACCOUNTS_KEY = 'fp-accounts';
+const PROPERTIES_KEY = 'fp-properties';
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -13,6 +14,9 @@ export function ensureSeed(){
       {id:'SANTANDER', name:'Santander', threshold:200},
       {id:'BBVA', name:'BBVA', threshold:200}
     ]));
+  }
+  if(!LS.getItem(PROPERTIES_KEY)){
+    LS.setItem(PROPERTIES_KEY, JSON.stringify([]));
   }
   if(!LS.getItem(REAL_KEY(year))){
     const today = new Date(); const y=today.getFullYear(), m=today.getMonth()+1;
@@ -35,6 +39,9 @@ export function getYear(){ return getSettings().year || new Date().getFullYear()
 export function setYear(y){ const s=getSettings(); s.year=y; setSettings(s); }
 export function getAccounts(){ return JSON.parse(LS.getItem(ACCOUNTS_KEY)||'[]'); }
 export function saveAccounts(arr){ LS.setItem(ACCOUNTS_KEY, JSON.stringify(arr)); }
+
+export function getProperties(){ return JSON.parse(LS.getItem(PROPERTIES_KEY)||'[]'); }
+export function saveProperties(arr){ LS.setItem(PROPERTIES_KEY, JSON.stringify(arr)); }
 
 export function getReal(y=getYear()){ return JSON.parse(LS.getItem(REAL_KEY(y))||'[]'); }
 export function saveReal(rows,y=getYear()){ LS.setItem(REAL_KEY(y), JSON.stringify(rows)); }
