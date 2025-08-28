@@ -3,6 +3,7 @@ const year = new Date().getFullYear();
 const SETTINGS_KEY = 'fp-settings';
 const REAL_KEY = y => `fp-real-${y}`;
 const ACCOUNTS_KEY = 'fp-accounts';
+const PROPERTIES_KEY = y => `fp-properties-${y}`;
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -38,6 +39,9 @@ export function saveAccounts(arr){ LS.setItem(ACCOUNTS_KEY, JSON.stringify(arr))
 
 export function getReal(y=getYear()){ return JSON.parse(LS.getItem(REAL_KEY(y))||'[]'); }
 export function saveReal(rows,y=getYear()){ LS.setItem(REAL_KEY(y), JSON.stringify(rows)); }
+
+export function getProperties(y=getYear()){ return JSON.parse(LS.getItem(PROPERTIES_KEY(y))||'[]'); }
+export function saveProperties(properties,y=getYear()){ LS.setItem(PROPERTIES_KEY(y), JSON.stringify(properties)); }
 
 export function applyTheme(){
   const s=getSettings();
