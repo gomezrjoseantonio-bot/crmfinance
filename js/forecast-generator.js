@@ -1,9 +1,10 @@
-import { getPMA, getRecurrences, saveForecast, getTaxTables } from './storage.js';
+import { getPMA, getRecurrences, saveForecast, getTaxTables, getProperties } from './storage.js';
 import { calculateNetSalary, addMonths, getLastDayOfMonth, fmtDateISO } from './utils.js';
 
 export function generateForecast(year, fromMonth = 1) {
   const pma = getPMA(year);
   const recurrences = getRecurrences();
+  const properties = getProperties(year);
   const taxTables = getTaxTables();
   const forecast = [];
   
@@ -13,18 +14,32 @@ export function generateForecast(year, fromMonth = 1) {
   if (pma.salary && pma.salary.grossAnnual > 0) {
     const netMonthlySalary = calculateNetSalary(pma.salary.grossAnnual, taxTables);
     
+    // Calculate variable amounts
+    const variablePercent = pma.salary.variablePercent || 0;
+    const totalVariableAmount = (pma.salary.grossAnnual * variablePercent) / 100;
+    const variableMonths = pma.salary.variableMonths || [];
+    const variableDistribution = pma.salary.variableDistribution || {};
+    
     for (let month = fromMonth; month <= 12; month++) {
-      const isExtraPayMonth = pma.salary.extraPayMonths.includes(month);
-      const payAmount = isExtraPayMonth ? netMonthlySalary * 2 : netMonthlySalary;
+      const isExtraPayMonth = (pma.salary.extraPayMonths || []).includes(month);
+      let payAmount = isExtraPayMonth ? netMonthlySalary * 2 : netMonthlySalary;
       
-      // Add variable amount if specified
-      const variableAmount = pma.salary.variableByMonth[month] || 0;
+      // Add variable amount if this month has variable pay
+      let variableAmount = 0;
+      if (variableMonths.includes(month)) {
+        const monthIndex = variableMonths.indexOf(month);
+        if (monthIndex === 0) {
+          variableAmount = (totalVariableAmount * (variableDistribution.month1 || 0)) / 100;
+        } else if (monthIndex === 1) {
+          variableAmount = (totalVariableAmount * (variableDistribution.month2 || 0)) / 100;
+        }
+      }
       
-      const payDate = calculatePayDate(year, month, pma.salary.payDay);
+      const payDate = calculatePayDate(year, month, pma.salary.payDay || 25);
       
       forecast.push({
         date: payDate,
-        accountId: pma.salary.accountId,
+        accountId: pma.salary.accountId || 'SANTANDER',
         concept: isExtraPayMonth ? 'Nómina + Paga extra' : 'Nómina',
         amount: payAmount + variableAmount,
         category: 'SALARIO',
@@ -32,6 +47,12 @@ export function generateForecast(year, fromMonth = 1) {
       });
     }
   }
+  
+  // Generate property rental income and expenses
+  properties.forEach(property => {
+    const propertyMovements = expandPropertyMovements(property, year, fromMonth);
+    forecast.push(...propertyMovements);
+  });
   
   // Generate recurrence movements
   recurrences.forEach(recurrence => {
@@ -176,4 +197,105 @@ function createMovementFromRecurrence(recurrence, date) {
     recurrenceId: recurrence.id,
     notes: recurrence.notes
   };
+}
+
+function expandPropertyMovements(property, year, fromMonth) {
+  const movements = [];
+  
+  // Generate rental income
+  if (property.monthlyRent && property.monthlyRent > 0) {
+    const yearlyRentals = property.yearlyRentals || {};
+    const yearData = yearlyRentals[year] || {
+      monthlyRent: property.monthlyRent,
+      bank: property.rentalBank || '',
+      startMonth: 1,
+      endMonth: 12,
+      adjustments: {}
+    };
+    
+    const startMonth = Math.max(yearData.startMonth || 1, fromMonth);
+    const endMonth = yearData.endMonth || 12;
+    
+    for (let month = startMonth; month <= endMonth; month++) {
+      const monthlyAmount = yearData.adjustments[month] ? 
+        parseFloat(yearData.adjustments[month]) : 
+        yearData.monthlyRent;
+      
+      if (monthlyAmount > 0) {
+        const rentalDate = fmtDateISO(new Date(year, month - 1, 5)); // 5th of each month
+        
+        movements.push({
+          date: rentalDate,
+          accountId: yearData.bank || property.rentalBank || 'SANTANDER',
+          concept: `Alquiler - ${property.address || property.id}`,
+          amount: monthlyAmount,
+          category: 'ALQUILER',
+          source: 'PROPERTY_RENTAL',
+          propertyId: property.id
+        });
+      }
+    }
+  }
+  
+  // Generate mortgage payments (monthly expenses)
+  const financing = property.financing || {};
+  if (financing.mortgage && financing.mortgage.payment > 0) {
+    for (let month = fromMonth; month <= 12; month++) {
+      const mortgageDate = fmtDateISO(new Date(year, month - 1, financing.mortgage.day || 1));
+      
+      movements.push({
+        date: mortgageDate,
+        accountId: financing.mortgage.bank || 'SANTANDER',
+        concept: `Hipoteca - ${property.address || property.id}`,
+        amount: -Math.abs(financing.mortgage.payment),
+        category: 'HIPOTECA',
+        source: 'PROPERTY_MORTGAGE',
+        propertyId: property.id
+      });
+    }
+  }
+  
+  // Generate other loan payments
+  if (financing.loans && financing.loans.payment > 0) {
+    for (let month = fromMonth; month <= 12; month++) {
+      const loanDate = fmtDateISO(new Date(year, month - 1, financing.loans.day || 15));
+      
+      movements.push({
+        date: loanDate,
+        accountId: financing.loans.bank || 'SANTANDER',
+        concept: `Préstamo inmueble - ${property.address || property.id}`,
+        amount: -Math.abs(financing.loans.payment),
+        category: 'PRESTAMO_INMUEBLE',
+        source: 'PROPERTY_LOAN',
+        propertyId: property.id
+      });
+    }
+  }
+  
+  // Generate operating costs (monthly expenses)
+  const operatingCosts = property.operatingCosts || {};
+  Object.entries(operatingCosts).forEach(([costId, costConfig]) => {
+    if (costConfig.applies && costConfig.amount > 0) {
+      const applicableMonths = costConfig.months || [1,2,3,4,5,6,7,8,9,10,11,12];
+      
+      applicableMonths.forEach(month => {
+        if (month >= fromMonth) {
+          const costDate = fmtDateISO(new Date(year, month - 1, costConfig.day || 10));
+          
+          movements.push({
+            date: costDate,
+            accountId: costConfig.bank || 'SANTANDER',
+            concept: `${costConfig.label || costId} - ${property.address || property.id}`,
+            amount: -Math.abs(costConfig.amount),
+            category: 'GASTOS_INMUEBLE',
+            source: 'PROPERTY_OPERATING_COST',
+            propertyId: property.id,
+            costType: costId
+          });
+        }
+      });
+    }
+  });
+  
+  return movements;
 }

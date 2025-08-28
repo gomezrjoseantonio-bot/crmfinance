@@ -1,5 +1,6 @@
 import { getPMA, savePMA, getAccounts, getTaxTables, saveTaxTables, getYear, setYear } from '../storage.js';
 import { fmtEUR, calculateNetSalary } from '../utils.js';
+import { generateForecast } from '../forecast-generator.js';
 
 // Input validation helper
 function validateInput(value, min = 0, max = Infinity, defaultValue = 0) {
@@ -229,9 +230,12 @@ function updateVariableDistribution(root) {
 
 // Generate forecast from nomina
 function generateNominaForecast(salaryConfig, year) {
-  // This will integrate with the existing forecast system
-  // Implementation will be done in the forecast-generator.js
-  console.log('Generating nomina forecast for year:', year, salaryConfig);
+  try {
+    const forecast = generateForecast(year, 1);
+    console.log('Generated forecast with', forecast.length, 'movements for year:', year);
+  } catch (err) {
+    console.error('Error generating forecast:', err);
+  }
 }
 
 // Export nómina calculation to Excel (keeping existing function)

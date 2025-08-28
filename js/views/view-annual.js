@@ -3,7 +3,7 @@ import { fmtEUR, groupBy } from '../utils.js';
 
 const view = {
   route: '#/annual',
-  title: 'Anual',
+  title: 'Presupuesto',
   
   async mount(root) {
     const year = getYear();
