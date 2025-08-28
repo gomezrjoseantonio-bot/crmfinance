@@ -68,13 +68,14 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
   ];
   
   const monthlyBase = salaryConfig.grossAnnual / salaryConfig.numPayments;
-  const monthlyDeductions = salaryData.totalDeductions / 12;
+  const taxTables = getTaxTables();
   
   return months.map((month, index) => {
     const monthNum = index + 1;
     const isExtraPayMonth = salaryConfig.extraPayMonths?.includes(monthNum);
     const isVariableMonth = salaryConfig.variableMonths?.includes(monthNum);
     const isBonusMonth = monthNum === salaryConfig.bonusMonth;
+    const isFlexiplanMonth = ![7, 8].includes(monthNum); // Flexiplan excluded in July & August
     
     let salaryBase = monthlyBase;
     let variable = 0;
@@ -96,6 +97,26 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
     }
     
     const monthlyGross = salaryBase + variable + bonus + extraPay;
+    
+    // Calculate proper monthly deductions based on actual monthly gross
+    const flexiplanDeduction = isFlexiplanMonth ? (salaryConfig.socialBenefits?.flexiplan?.amount || 0) : 0;
+    const grossBeforeFlexiplan = monthlyGross - flexiplanDeduction;
+    
+    // Social Security contributions (capped at max base)
+    const ssBaseMonthly = Math.min(grossBeforeFlexiplan, taxTables.ss.max);
+    const ssContribution = ssBaseMonthly * taxTables.ss.rate;
+    const unemploymentContribution = ssBaseMonthly * 0.0155; // 1.55%
+    const trainingContribution = ssBaseMonthly * 0.001; // 0.10%
+    
+    // IRPF calculation for this month (proportional to annual)
+    const irpfContribution = (salaryData.irpfContribution / salaryData.totalEconomic) * grossBeforeFlexiplan;
+    
+    // Other deductions
+    const solidarityFee = (salaryConfig.solidarityFee || 0);
+    const pensionPlan = (salaryConfig.pensionPlan || 0);
+    
+    const monthlyDeductions = ssContribution + unemploymentContribution + trainingContribution + 
+                             irpfContribution + solidarityFee + pensionPlan + flexiplanDeduction;
     const monthlyNet = monthlyGross - monthlyDeductions;
     
     return `
@@ -164,7 +185,7 @@ function exportMonthlyBreakdownToExcel(salaryConfig, salaryData, year) {
   ];
   
   const monthlyBase = salaryConfig.grossAnnual / salaryConfig.numPayments;
-  const monthlyDeductions = salaryData.totalDeductions / 12;
+  const taxTables = getTaxTables();
   
   // Create headers
   const csvContent = [
@@ -179,6 +200,7 @@ function exportMonthlyBreakdownToExcel(salaryConfig, salaryData, year) {
     const isExtraPayMonth = salaryConfig.extraPayMonths?.includes(monthNum);
     const isVariableMonth = salaryConfig.variableMonths?.includes(monthNum);
     const isBonusMonth = monthNum === salaryConfig.bonusMonth;
+    const isFlexiplanMonth = ![7, 8].includes(monthNum); // Flexiplan excluded in July & August
     
     let salaryBase = monthlyBase;
     let variable = 0;
@@ -200,6 +222,26 @@ function exportMonthlyBreakdownToExcel(salaryConfig, salaryData, year) {
     }
     
     const monthlyGross = salaryBase + variable + bonus + extraPay;
+    
+    // Calculate proper monthly deductions based on actual monthly gross
+    const flexiplanDeduction = isFlexiplanMonth ? (salaryConfig.socialBenefits?.flexiplan?.amount || 0) : 0;
+    const grossBeforeFlexiplan = monthlyGross - flexiplanDeduction;
+    
+    // Social Security contributions (capped at max base)
+    const ssBaseMonthly = Math.min(grossBeforeFlexiplan, taxTables.ss.max);
+    const ssContribution = ssBaseMonthly * taxTables.ss.rate;
+    const unemploymentContribution = ssBaseMonthly * 0.0155; // 1.55%
+    const trainingContribution = ssBaseMonthly * 0.001; // 0.10%
+    
+    // IRPF calculation for this month (proportional to annual)
+    const irpfContribution = (salaryData.irpfContribution / salaryData.totalEconomic) * grossBeforeFlexiplan;
+    
+    // Other deductions
+    const solidarityFee = (salaryConfig.solidarityFee || 0);
+    const pensionPlan = (salaryConfig.pensionPlan || 0);
+    
+    const monthlyDeductions = ssContribution + unemploymentContribution + trainingContribution + 
+                             irpfContribution + solidarityFee + pensionPlan + flexiplanDeduction;
     const monthlyNet = monthlyGross - monthlyDeductions;
     
     csvContent.push([
