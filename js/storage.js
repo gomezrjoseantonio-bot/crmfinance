@@ -2,6 +2,9 @@ const LS = window.localStorage;
 const year = new Date().getFullYear();
 const SETTINGS_KEY = 'fp-settings';
 const REAL_KEY = y => `fp-real-${y}`;
+const BUDGET_KEY = y => `fp-budget-${y}`;
+const PROPERTIES_KEY = 'fp-properties';
+const LOANS_KEY = 'fp-loans';
 const ACCOUNTS_KEY = 'fp-accounts';
 
 export function ensureSeed(){
@@ -11,7 +14,13 @@ export function ensureSeed(){
   if(!LS.getItem(ACCOUNTS_KEY)){
     LS.setItem(ACCOUNTS_KEY, JSON.stringify([
       {id:'SANTANDER', name:'Santander', threshold:200},
-      {id:'BBVA', name:'BBVA', threshold:200}
+      {id:'BBVA', name:'BBVA', threshold:200},
+      {id:'CAIXABANK', name:'CaixaBank', threshold:300},
+      {id:'BANKINTER', name:'Bankinter', threshold:250},
+      {id:'ING', name:'ING', threshold:150},
+      {id:'OPENBANK', name:'Openbank', threshold:100},
+      {id:'BANCO_SABADELL', name:'Banco Sabadell', threshold:200},
+      {id:'UNICAJA', name:'Unicaja', threshold:180}
     ]));
   }
   if(!LS.getItem(REAL_KEY(year))){
@@ -27,6 +36,24 @@ export function ensureSeed(){
     ];
     LS.setItem(REAL_KEY(y), JSON.stringify(rows));
   }
+  if(!LS.getItem(PROPERTIES_KEY)){
+    LS.setItem(PROPERTIES_KEY, JSON.stringify([
+      {
+        id: Date.now(),
+        name: 'Piso A',
+        address: 'Calle Principal 123',
+        type: 'global',
+        basePrice: 1400,
+        rooms: 3,
+        fixedExpenses: 200,
+        roomsRented: null,
+        created: new Date().toISOString()
+      }
+    ]));
+  }
+  if(!LS.getItem(LOANS_KEY)){
+    LS.setItem(LOANS_KEY, JSON.stringify([]));
+  }
   applyTheme();
 }
 export function getSettings(){ return JSON.parse(LS.getItem(SETTINGS_KEY)||'{}'); }
@@ -38,6 +65,18 @@ export function saveAccounts(arr){ LS.setItem(ACCOUNTS_KEY, JSON.stringify(arr))
 
 export function getReal(y=getYear()){ return JSON.parse(LS.getItem(REAL_KEY(y))||'[]'); }
 export function saveReal(rows,y=getYear()){ LS.setItem(REAL_KEY(y), JSON.stringify(rows)); }
+
+// Budget functions
+export function getBudget(y=getYear()){ return JSON.parse(LS.getItem(BUDGET_KEY(y))||'[]'); }
+export function saveBudget(rows,y=getYear()){ LS.setItem(BUDGET_KEY(y), JSON.stringify(rows)); }
+
+// Properties functions  
+export function getProperties(){ return JSON.parse(LS.getItem(PROPERTIES_KEY)||'[]'); }
+export function saveProperties(arr){ LS.setItem(PROPERTIES_KEY, JSON.stringify(arr)); }
+
+// Loans functions
+export function getLoans(){ return JSON.parse(LS.getItem(LOANS_KEY)||'[]'); }
+export function saveLoans(arr){ LS.setItem(LOANS_KEY, JSON.stringify(arr)); }
 
 export function applyTheme(){
   const s=getSettings();
