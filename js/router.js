@@ -2,9 +2,10 @@
 import viewHoy from './views/view-hoy.js';
 import viewImportar from './views/view-importar.js';
 import viewMes from './views/view-mes.js';
+import viewReportes from './views/view-reportes.js';
 import viewConfig from './views/view-config.js';
 
-const VIEWS = [viewHoy, viewImportar, viewMes, viewConfig];
+const VIEWS = [viewHoy, viewImportar, viewMes, viewReportes, viewConfig];
 
 function currentRoute(){ return location.hash || '#/hoy'; }
 
