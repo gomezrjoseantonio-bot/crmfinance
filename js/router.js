@@ -4,8 +4,15 @@ import viewImportar from './views/view-importar.js';
 import viewMes from './views/view-mes.js';
 import viewReportes from './views/view-reportes.js';
 import viewConfig from './views/view-config.js';
+import viewNomina from './views/view-nomina.js';
+import viewRecurrences from './views/view-recurrences.js';
+import viewCalendar from './views/view-calendar.js';
+import viewLoans from './views/view-loans.js';
+import viewAnnual from './views/view-annual.js';
+import viewExport from './views/view-export.js';
+import viewInmuebles from './views/view-inmuebles-complex.js';
 
-const VIEWS = [viewHoy, viewImportar, viewMes, viewReportes, viewConfig];
+const VIEWS = [viewHoy, viewNomina, viewRecurrences, viewCalendar, viewLoans, viewInmuebles, viewAnnual, viewMes, viewImportar, viewReportes, viewExport, viewConfig];
 
 function currentRoute(){ return location.hash || '#/hoy'; }
 

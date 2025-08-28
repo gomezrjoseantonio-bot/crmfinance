@@ -5,6 +5,11 @@ const REAL_KEY = y => `fp-real-${y}`;
 const ACCOUNTS_KEY = 'fp-accounts';
 const CATEGORIES_KEY = 'fp-categories';
 const BUDGETS_KEY = 'fp-budgets';
+const PMA_KEY = y => `fp-pma-${y}`;
+const RECURRENCES_KEY = 'fp-recurrences';
+const FORECAST_KEY = y => `fp-forecast-${y}`;
+const TAXES_KEY = 'fp-taxes';
+const PROPERTIES_KEY = y => `fp-properties-${y}`;
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -12,8 +17,34 @@ export function ensureSeed(){
   }
   if(!LS.getItem(ACCOUNTS_KEY)){
     LS.setItem(ACCOUNTS_KEY, JSON.stringify([
-      {id:'SANTANDER', name:'Santander', threshold:200},
-      {id:'BBVA', name:'BBVA', threshold:200}
+      {
+        id:'SANTANDER', 
+        name:'Santander', 
+        threshold:200,
+        color:'#EC0000',
+        logo:'https://www.santander.com/content/dam/santander-com/logos/banco-santander-logo-horizontal.svg'
+      },
+      {
+        id:'BBVA', 
+        name:'BBVA', 
+        threshold:200,
+        color:'#004481',
+        logo:'https://www.bbva.com/wp-content/uploads/2016/05/bbva-logo-2019.svg'
+      },
+      {
+        id:'CAIXABANK', 
+        name:'CaixaBank', 
+        threshold:200,
+        color:'#0075C9',
+        logo:'https://www.caixabank.com/deployedfiles/caixabank_com/Estaticos/Imagenes/logo-caixabank.svg'
+      },
+      {
+        id:'SABADELL', 
+        name:'Banco Sabadell', 
+        threshold:200,
+        color:'#0078D0',
+        logo:'https://www.bancsabadell.com/cs/Satellite?blobcol=urldata&blobheader=image%2Fsvg%2Bxml&blobkey=id&blobtable=MungoBlobs&blobwhere=1234567890123&ssbinary=true'
+      }
     ]));
   }
   if(!LS.getItem(CATEGORIES_KEY)){
@@ -65,6 +96,57 @@ export function saveCategories(arr){ LS.setItem(CATEGORIES_KEY, JSON.stringify(a
 
 export function getBudgets(){ return JSON.parse(LS.getItem(BUDGETS_KEY)||'[]'); }
 export function saveBudgets(arr){ LS.setItem(BUDGETS_KEY, JSON.stringify(arr)); }
+
+// Plan Maestro Anual (PMA)
+export function getPMA(y=getYear()){ return JSON.parse(LS.getItem(PMA_KEY(y))||'{}'); }
+export function savePMA(pma,y=getYear()){ LS.setItem(PMA_KEY(y), JSON.stringify(pma)); }
+
+// Recurrencias maestro
+export function getRecurrences(){ return JSON.parse(LS.getItem(RECURRENCES_KEY)||'[]'); }
+export function saveRecurrences(recurrences){ LS.setItem(RECURRENCES_KEY, JSON.stringify(recurrences)); }
+
+// Forecast
+export function getForecast(y=getYear()){ return JSON.parse(LS.getItem(FORECAST_KEY(y))||'[]'); }
+export function saveForecast(forecast,y=getYear()){ LS.setItem(FORECAST_KEY(y), JSON.stringify(forecast)); }
+
+// Tablas de IRPF y SS
+export function getTaxTables(){ 
+  return JSON.parse(LS.getItem(TAXES_KEY)||JSON.stringify({
+    irpf: [
+      {min: 0, max: 12450, rate: 0.19},
+      {min: 12450, max: 20200, rate: 0.24},
+      {min: 20200, max: 35200, rate: 0.30},
+      {min: 35200, max: 60000, rate: 0.37},
+      {min: 60000, max: 300000, rate: 0.47},
+      {min: 300000, max: Infinity, rate: 0.47}
+    ],
+    ss: {rate: 0.0635, max: 4495.50}
+  }));
+}
+export function saveTaxTables(tables){ LS.setItem(TAXES_KEY, JSON.stringify(tables)); }
+
+// Company logo lookup
+export function getCompanyLogo(companyName) {
+  const companyLogos = {
+    'microsoft': 'https://www.microsoft.com/favicon.ico',
+    'google': 'https://www.google.com/favicon.ico',
+    'amazon': 'https://www.amazon.com/favicon.ico',
+    'apple': 'https://www.apple.com/favicon.ico',
+    'ibm': 'https://www.ibm.com/favicon.ico',
+    'telefonica': 'https://www.telefonica.com/favicon.ico',
+    'bbva': 'https://www.bbva.com/favicon.ico',
+    'santander': 'https://www.santander.com/favicon.ico',
+    'repsol': 'https://www.repsol.com/favicon.ico',
+    'inditex': 'https://www.inditex.com/favicon.ico'
+  };
+  
+  const company = companyName.toLowerCase().trim();
+  return companyLogos[company] || null;
+}
+
+// Properties (Inmuebles)
+export function getProperties(y=getYear()){ return JSON.parse(LS.getItem(PROPERTIES_KEY(y))||'[]'); }
+export function saveProperties(properties,y=getYear()){ LS.setItem(PROPERTIES_KEY(y), JSON.stringify(properties)); }
 
 export function getBudgetAlerts(y = getYear()) {
   const rows = getReal(y);
