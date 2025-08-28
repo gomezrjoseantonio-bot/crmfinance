@@ -108,8 +108,19 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
     const unemploymentContribution = ssBaseMonthly * 0.0155; // 1.55%
     const trainingContribution = ssBaseMonthly * 0.001; // 0.10%
     
-    // IRPF calculation for this month (proportional to annual)
-    const irpfContribution = (salaryData.irpfContribution / salaryData.totalEconomic) * grossBeforeFlexiplan;
+    // Calculate monthly taxable income
+    const monthlyTaxableIncome = grossBeforeFlexiplan - ssContribution - unemploymentContribution - trainingContribution;
+    
+    // IRPF calculation for this month based on monthly income
+    let irpfContribution = 0;
+    if (salaryConfig.manualIrpfRate && salaryConfig.manualIrpfRate > 0) {
+      // Use manual IRPF rate
+      irpfContribution = monthlyTaxableIncome * (salaryConfig.manualIrpfRate / 100);
+    } else {
+      // Use the effective IRPF rate from annual calculation applied to monthly taxable income
+      const effectiveIrpfRate = salaryData.irpfRate;
+      irpfContribution = monthlyTaxableIncome * effectiveIrpfRate;
+    }
     
     // Other deductions
     const solidarityFee = (salaryConfig.solidarityFee || 0);
@@ -233,8 +244,19 @@ function exportMonthlyBreakdownToExcel(salaryConfig, salaryData, year) {
     const unemploymentContribution = ssBaseMonthly * 0.0155; // 1.55%
     const trainingContribution = ssBaseMonthly * 0.001; // 0.10%
     
-    // IRPF calculation for this month (proportional to annual)
-    const irpfContribution = (salaryData.irpfContribution / salaryData.totalEconomic) * grossBeforeFlexiplan;
+    // Calculate monthly taxable income
+    const monthlyTaxableIncome = grossBeforeFlexiplan - ssContribution - unemploymentContribution - trainingContribution;
+    
+    // IRPF calculation for this month based on monthly income
+    let irpfContribution = 0;
+    if (salaryConfig.manualIrpfRate && salaryConfig.manualIrpfRate > 0) {
+      // Use manual IRPF rate
+      irpfContribution = monthlyTaxableIncome * (salaryConfig.manualIrpfRate / 100);
+    } else {
+      // Use the effective IRPF rate from annual calculation applied to monthly taxable income
+      const effectiveIrpfRate = salaryData.irpfRate;
+      irpfContribution = monthlyTaxableIncome * effectiveIrpfRate;
+    }
     
     // Other deductions
     const solidarityFee = (salaryConfig.solidarityFee || 0);
