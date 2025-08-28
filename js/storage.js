@@ -7,6 +7,7 @@ const PMA_KEY = y => `fp-pma-${y}`;
 const RECURRENCES_KEY = 'fp-recurrences';
 const FORECAST_KEY = y => `fp-forecast-${y}`;
 const TAXES_KEY = 'fp-taxes';
+const PROPERTIES_KEY = y => `fp-properties-${y}`;
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -115,6 +116,10 @@ export function getCompanyLogo(companyName) {
   const company = companyName.toLowerCase().trim();
   return companyLogos[company] || null;
 }
+
+// Properties (Inmuebles)
+export function getProperties(y=getYear()){ return JSON.parse(LS.getItem(PROPERTIES_KEY(y))||'[]'); }
+export function saveProperties(properties,y=getYear()){ LS.setItem(PROPERTIES_KEY(y), JSON.stringify(properties)); }
 
 export function applyTheme(){
   const s=getSettings();

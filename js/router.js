@@ -9,8 +9,9 @@ import viewCalendar from './views/view-calendar.js';
 import viewLoans from './views/view-loans.js';
 import viewAnnual from './views/view-annual.js';
 import viewExport from './views/view-export.js';
+import viewInmuebles from './views/view-inmuebles-complex.js';
 
-const VIEWS = [viewHoy, viewNomina, viewRecurrences, viewCalendar, viewLoans, viewAnnual, viewMes, viewImportar, viewExport, viewConfig];
+const VIEWS = [viewHoy, viewNomina, viewRecurrences, viewCalendar, viewLoans, viewInmuebles, viewAnnual, viewMes, viewImportar, viewExport, viewConfig];
 
 function currentRoute(){ return location.hash || '#/hoy'; }
 
