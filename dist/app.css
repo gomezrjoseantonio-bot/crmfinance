@@ -39,8 +39,25 @@ input,select,button{font:inherit;color:inherit}
 input,select{padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
 button{padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);cursor:pointer}
 button.primary{background:var(--accent);color:white;border-color:var(--accent)}
+button.secondary{background:var(--card);border-color:var(--border);}
+button.danger{background:#dc2626;color:white;border-color:#dc2626}
+button.small{padding:4px 8px;font-size:12px}
 .grid{overflow:auto;border:1px solid var(--border);border-radius:12px}
 table{border-collapse:collapse;width:100%}
 th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
 tr:nth-child(2n){background:color-mix(in srgb, var(--card) 60%, var(--bg))}
 .small{font-size:12px}
+
+/* Property Management Styles */
+.form-group{margin-bottom:15px}
+.form-group label{display:block;margin-bottom:5px;font-weight:500}
+.property-item{transition:box-shadow 0.2s ease}
+.property-item:hover{box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.cost-item{transition:box-shadow 0.2s ease}
+.cost-item:hover{box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.badge.occupied{background:#dc2626;color:white;border-color:#dc2626}
+.badge.available{background:#16a34a;color:white;border-color:#16a34a}
+#months-selection{display:flex;flex-wrap:wrap;gap:10px}
+#months-selection label{margin:0;font-weight:normal;font-size:14px}
+.loading{opacity:0.6;pointer-events:none}
+.error{color:#dc2626;font-size:12px;margin-top:5px}
