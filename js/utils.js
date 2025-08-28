@@ -66,3 +66,65 @@ export function addMonths(date, months) {
 export function getLastDayOfMonth(year, month) {
   return new Date(year, month, 0).getDate();
 }
+
+// Calculate current loan state based on start date and payments made
+export function calculateCurrentLoanState(loan, currentDate = new Date()) {
+  const startDate = new Date(loan.startDate);
+  const current = new Date(currentDate);
+  
+  // Calculate months elapsed since loan start
+  const monthsElapsed = Math.max(0, (current.getFullYear() - startDate.getFullYear()) * 12 + 
+                                    (current.getMonth() - startDate.getMonth()));
+  
+  const originalSchedule = calculateFrenchAmortization(loan.principal, loan.effectiveRate / 100, loan.years);
+  const totalMonths = originalSchedule.length;
+  
+  // If loan is complete
+  if (monthsElapsed >= totalMonths) {
+    return {
+      isComplete: true,
+      monthsElapsed: totalMonths,
+      monthsRemaining: 0,
+      currentBalance: 0,
+      monthlyPayment: 0,
+      totalPaid: loan.principal + originalSchedule.reduce((sum, p) => sum + p.interest, 0),
+      interestPaid: originalSchedule.reduce((sum, p) => sum + p.interest, 0),
+      originalSchedule,
+      currentSchedule: []
+    };
+  }
+  
+  // Calculate current state
+  const monthsRemaining = Math.max(0, totalMonths - monthsElapsed);
+  const currentBalance = monthsElapsed < originalSchedule.length ? 
+                        originalSchedule[monthsElapsed].balance : 0;
+  const monthlyPayment = originalSchedule.length > 0 ? originalSchedule[0].payment : 0;
+  
+  // Calculate what has been paid so far
+  const paymentsToDate = originalSchedule.slice(0, monthsElapsed);
+  const totalPaid = paymentsToDate.reduce((sum, p) => sum + p.payment, 0);
+  const interestPaid = paymentsToDate.reduce((sum, p) => sum + p.interest, 0);
+  
+  // Remaining schedule
+  const currentSchedule = originalSchedule.slice(monthsElapsed);
+  
+  return {
+    isComplete: false,
+    monthsElapsed,
+    monthsRemaining,
+    currentBalance,
+    monthlyPayment,
+    totalPaid,
+    interestPaid,
+    originalSchedule,
+    currentSchedule
+  };
+}
+
+// Calculate months between two dates
+export function monthsBetween(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  return Math.max(0, (end.getFullYear() - start.getFullYear()) * 12 + 
+                     (end.getMonth() - start.getMonth()));
+}
