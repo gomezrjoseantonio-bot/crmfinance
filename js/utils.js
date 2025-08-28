@@ -12,3 +12,57 @@ export function parseEuro(str){
 export function groupBy(arr, key){
   return arr.reduce((m,it)=>{ const k=typeof key==='function'? key(it): it[key]; (m[k]||(m[k]=[])).push(it); return m; },{});
 }
+
+// Financial calculations
+export function calculateNetSalary(grossAnnual, taxTables) {
+  const gross = grossAnnual / 12;
+  const ssContrib = Math.min(gross * taxTables.ss.rate, taxTables.ss.max);
+  const taxableIncome = Math.max(0, gross - ssContrib);
+  
+  let irpf = 0;
+  for (const bracket of taxTables.irpf) {
+    if (taxableIncome > bracket.min) {
+      const taxableInBracket = Math.min(taxableIncome, bracket.max) - bracket.min;
+      irpf += taxableInBracket * bracket.rate;
+    }
+  }
+  
+  return gross - ssContrib - irpf;
+}
+
+export function calculateFrenchAmortization(principal, annualRate, years) {
+  const monthlyRate = annualRate / 12;
+  const numPayments = years * 12;
+  const monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / (Math.pow(1 + monthlyRate, numPayments) - 1);
+  
+  const schedule = [];
+  let balance = principal;
+  
+  for (let i = 1; i <= numPayments; i++) {
+    const interestPayment = balance * monthlyRate;
+    const principalPayment = monthlyPayment - interestPayment;
+    balance -= principalPayment;
+    
+    schedule.push({
+      month: i,
+      payment: monthlyPayment,
+      principal: principalPayment,
+      interest: interestPayment,
+      balance: Math.max(0, balance)
+    });
+    
+    if (balance <= 0) break;
+  }
+  
+  return schedule;
+}
+
+export function addMonths(date, months) {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+export function getLastDayOfMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
