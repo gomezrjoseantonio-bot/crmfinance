@@ -1,6 +1,110 @@
 import { getPMA, getRecurrences, saveForecast, getTaxTables, getProperties } from './storage.js';
 import { calculateNetSalary, addMonths, getLastDayOfMonth, fmtDateISO } from './utils.js';
 
+// Enhanced monthly salary calculation that matches nomina view logic
+function calculateMonthlyNetSalary(salaryConfig, taxTables, monthNum) {
+  try {
+    // Validate inputs
+    const validateInput = (value, min = 0, max = Infinity, defaultValue = 0) => {
+      const num = parseFloat(value);
+      if (isNaN(num) || num < min || num > max) return defaultValue;
+      return Number(num.toFixed(2));
+    };
+
+    const grossAnnual = validateInput(salaryConfig.grossAnnual, 0, 10000000, 0);
+    const monthlyBase = Number((grossAnnual / (salaryConfig.numPayments || 14)).toFixed(2));
+    
+    // Check if this month has special payments
+    const isExtraPayMonth = salaryConfig.extraPayMonths && salaryConfig.extraPayMonths.includes(monthNum);
+    const isVariableMonth = salaryConfig.variableMonths && salaryConfig.variableMonths.includes(monthNum);
+    const isBonusMonth = salaryConfig.bonusMonth === monthNum;
+    const isFlexiplanMonth = !(salaryConfig.socialBenefits?.flexiplan?.excludeMonths || [7, 8]).includes(monthNum);
+    
+    let salaryBase = monthlyBase;
+    let variable = 0;
+    let bonus = 0;
+    let extraPay = 0;
+    
+    // Calculate extra pay
+    if (isExtraPayMonth && salaryConfig.numPayments === 14) {
+      extraPay = monthlyBase;
+    }
+    
+    // Calculate variable pay
+    if (isVariableMonth && salaryConfig.variablePercent > 0) {
+      const monthKey = salaryConfig.variableMonths.indexOf(monthNum);
+      const variablePercent = monthKey === 0 ? 
+        validateInput(salaryConfig.variableDistribution?.month1, 0, 200, 40) : 
+        validateInput(salaryConfig.variableDistribution?.month2, 0, 200, 60);
+      variable = Number(((salaryConfig.grossAnnual * salaryConfig.variablePercent / 100) * (variablePercent / 100)).toFixed(2));
+    }
+    
+    // Calculate bonus
+    if (isBonusMonth && salaryConfig.bonusPercent > 0) {
+      bonus = Number((salaryConfig.grossAnnual * salaryConfig.bonusPercent / 100).toFixed(2));
+    }
+    
+    const monthlyGross = Number((salaryBase + variable + bonus + extraPay).toFixed(2));
+    
+    // Calculate monthly deductions
+    const flexiplanDeduction = isFlexiplanMonth ? validateInput(salaryConfig.socialBenefits?.flexiplan?.amount, 0, 1000, 0) : 0;
+    const grossBeforeFlexiplan = Number((monthlyGross - flexiplanDeduction).toFixed(2));
+    
+    // Social Security contributions
+    const ssBaseMonthly = Math.min(grossBeforeFlexiplan, taxTables.ss.max);
+    const ssContribution = Number((ssBaseMonthly * taxTables.ss.rate).toFixed(2));
+    const unemploymentContribution = Number((ssBaseMonthly * 0.0155).toFixed(2));
+    const trainingContribution = Number((ssBaseMonthly * 0.001).toFixed(2));
+    
+    // Calculate monthly taxable income
+    const monthlyTaxableIncome = Number((grossBeforeFlexiplan - ssContribution - unemploymentContribution - trainingContribution).toFixed(2));
+    
+    // IRPF calculation - simplified for forecast
+    let irpfContribution = 0;
+    const manualIrpfRate = validateInput(salaryConfig.manualIrpfRate, 0, 50, 0);
+    if (manualIrpfRate > 0) {
+      irpfContribution = Number((monthlyTaxableIncome * (manualIrpfRate / 100)).toFixed(2));
+    } else {
+      // Use approximate annual effective rate for monthly calculation
+      const annualGross = salaryConfig.grossAnnual || 90646;
+      let annualIrpfContribution = 0;
+      let remainingIncome = annualGross;
+      
+      for (const bracket of taxTables.irpf) {
+        if (remainingIncome > bracket.min) {
+          const taxableInBracket = Math.min(remainingIncome, bracket.max) - bracket.min;
+          annualIrpfContribution += taxableInBracket * bracket.rate;
+          remainingIncome -= taxableInBracket;
+        }
+      }
+      
+      // Calculate effective rate and apply to monthly income
+      const effectiveRate = annualIrpfContribution / annualGross;
+      irpfContribution = Number((monthlyTaxableIncome * effectiveRate).toFixed(2));
+    }
+    
+    // Other deductions
+    const solidarityFee = validateInput(salaryConfig.solidarityFee, 0, 1000, 0);
+    const pensionPlan = validateInput(salaryConfig.pensionPlan, 0, 10000, 0);
+    
+    const monthlyDeductions = Number((ssContribution + unemploymentContribution + trainingContribution + 
+                                     irpfContribution + solidarityFee + pensionPlan + flexiplanDeduction).toFixed(2));
+    const monthlyNet = Number((monthlyGross - monthlyDeductions).toFixed(2));
+    
+    return {
+      monthlyNet,
+      monthlyGross,
+      monthlyDeductions,
+      isExtraPayMonth,
+      isVariableMonth,
+      isBonusMonth
+    };
+  } catch (error) {
+    console.error(`Error calculating monthly salary for month ${monthNum}:`, error);
+    return { monthlyNet: 0, monthlyGross: 0, monthlyDeductions: 0, isExtraPayMonth: false, isVariableMonth: false, isBonusMonth: false };
+  }
+}
+
 export function generateForecast(year, fromMonth = 1) {
   try {
     const pma = getPMA(year);
@@ -11,25 +115,33 @@ export function generateForecast(year, fromMonth = 1) {
     
     console.log('Generating forecast for year', year, 'from month', fromMonth);
     console.log('PMA data:', pma);
+    console.log('Recurrences:', recurrences);
+    console.log('Properties:', properties);
     
-    // Generate salary movements with minimal logic
+    // Generate salary movements with proper detailed monthly logic
     if (pma.salary && pma.salary.grossAnnual > 0) {
       try {
         console.log('Salary config:', pma.salary);
-        const netMonthlySalary = calculateNetSalary(pma.salary.grossAnnual, taxTables);
-        console.log('Net monthly salary:', netMonthlySalary);
         
         for (let month = fromMonth; month <= 12; month++) {
-          console.log('Processing month:', month);
+          console.log('Processing salary for month:', month);
           
-          // Simple date calculation
-          const payDate = `${year}-${String(month).padStart(2, '0')}-25`;
+          // Calculate detailed monthly amounts using the same logic as nomina view
+          const monthlyDetails = calculateMonthlyNetSalary(pma.salary, taxTables, month);
+          console.log(`Month ${month} detailed calculation:`, monthlyDetails);
+          
+          if (!monthlyDetails || monthlyDetails.monthlyNet === 0) {
+            console.error(`Failed to calculate monthly details for month ${month}`);
+            continue;
+          }
+          
+          const payDate = calculatePayDate(year, month, pma.salary.payDay || 25);
           
           forecast.push({
             date: payDate,
             accountId: pma.salary.accountId || 'SANTANDER',
-            concept: 'Nómina',
-            amount: netMonthlySalary,
+            concept: monthlyDetails.isExtraPayMonth ? 'Nómina + Paga extra' : 'Nómina',
+            amount: monthlyDetails.monthlyNet,
             category: 'SALARIO',
             source: 'PMA_SALARY'
           });
@@ -39,13 +151,37 @@ export function generateForecast(year, fromMonth = 1) {
       }
     }
     
+    // Generate recurrence movements
+    console.log('Processing recurrences...');
+    recurrences.forEach(recurrence => {
+      try {
+        const movements = expandRecurrence(recurrence, year, fromMonth);
+        console.log(`Generated ${movements.length} movements for recurrence:`, recurrence.concept);
+        forecast.push(...movements);
+      } catch (recError) {
+        console.error('Error expanding recurrence:', recurrence, recError);
+      }
+    });
+    
+    // Generate property movements (rental income, mortgages, operating costs)
+    console.log('Processing properties...');
+    properties.forEach(property => {
+      try {
+        const movements = expandPropertyMovements(property, year, fromMonth);
+        console.log(`Generated ${movements.length} movements for property:`, property.address || property.id);
+        forecast.push(...movements);
+      } catch (propError) {
+        console.error('Error expanding property movements:', property, propError);
+      }
+    });
+    
     // Sort by date
     forecast.sort((a, b) => a.date.localeCompare(b.date));
     
     // Save forecast
     saveForecast(forecast, year);
     
-    console.log(`Generated ${forecast.length} forecast movements`);
+    console.log(`Generated ${forecast.length} total forecast movements`);
     return forecast;
   } catch (error) {
     console.error('Error in generateForecast:', error);

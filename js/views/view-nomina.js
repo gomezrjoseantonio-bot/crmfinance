@@ -328,10 +328,10 @@ const view = {
   title: 'Nómina',
   
   async mount(root) {
-    const nomina = getPMA();
+    const currentYear = getYear();
+    const nomina = getPMA(currentYear);  // Use year parameter consistently
     const accounts = getAccounts();
     const taxTables = getTaxTables();
-    const currentYear = getYear();
     
     // Initialize default nomina structure if empty
     if (!nomina.salary) {
