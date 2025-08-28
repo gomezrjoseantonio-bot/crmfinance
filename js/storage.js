@@ -14,8 +14,34 @@ export function ensureSeed(){
   }
   if(!LS.getItem(ACCOUNTS_KEY)){
     LS.setItem(ACCOUNTS_KEY, JSON.stringify([
-      {id:'SANTANDER', name:'Santander', threshold:200},
-      {id:'BBVA', name:'BBVA', threshold:200}
+      {
+        id:'SANTANDER', 
+        name:'Santander', 
+        threshold:200,
+        color:'#EC0000',
+        logo:'https://www.santander.com/content/dam/santander-com/logos/banco-santander-logo-horizontal.svg'
+      },
+      {
+        id:'BBVA', 
+        name:'BBVA', 
+        threshold:200,
+        color:'#004481',
+        logo:'https://www.bbva.com/wp-content/uploads/2016/05/bbva-logo-2019.svg'
+      },
+      {
+        id:'CAIXABANK', 
+        name:'CaixaBank', 
+        threshold:200,
+        color:'#0075C9',
+        logo:'https://www.caixabank.com/deployedfiles/caixabank_com/Estaticos/Imagenes/logo-caixabank.svg'
+      },
+      {
+        id:'SABADELL', 
+        name:'Banco Sabadell', 
+        threshold:200,
+        color:'#0078D0',
+        logo:'https://www.bancsabadell.com/cs/Satellite?blobcol=urldata&blobheader=image%2Fsvg%2Bxml&blobkey=id&blobtable=MungoBlobs&blobwhere=1234567890123&ssbinary=true'
+      }
     ]));
   }
   if(!LS.getItem(REAL_KEY(year))){
@@ -70,6 +96,25 @@ export function getTaxTables(){
   }));
 }
 export function saveTaxTables(tables){ LS.setItem(TAXES_KEY, JSON.stringify(tables)); }
+
+// Company logo lookup
+export function getCompanyLogo(companyName) {
+  const companyLogos = {
+    'microsoft': 'https://www.microsoft.com/favicon.ico',
+    'google': 'https://www.google.com/favicon.ico',
+    'amazon': 'https://www.amazon.com/favicon.ico',
+    'apple': 'https://www.apple.com/favicon.ico',
+    'ibm': 'https://www.ibm.com/favicon.ico',
+    'telefonica': 'https://www.telefonica.com/favicon.ico',
+    'bbva': 'https://www.bbva.com/favicon.ico',
+    'santander': 'https://www.santander.com/favicon.ico',
+    'repsol': 'https://www.repsol.com/favicon.ico',
+    'inditex': 'https://www.inditex.com/favicon.ico'
+  };
+  
+  const company = companyName.toLowerCase().trim();
+  return companyLogos[company] || null;
+}
 
 export function applyTheme(){
   const s=getSettings();

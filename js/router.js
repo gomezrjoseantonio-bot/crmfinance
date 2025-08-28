@@ -3,14 +3,14 @@ import viewHoy from './views/view-hoy.js';
 import viewImportar from './views/view-importar.js';
 import viewMes from './views/view-mes.js';
 import viewConfig from './views/view-config.js';
-import viewPMA from './views/view-pma.js';
+import viewNomina from './views/view-nomina.js';
 import viewRecurrences from './views/view-recurrences.js';
 import viewCalendar from './views/view-calendar.js';
 import viewLoans from './views/view-loans.js';
 import viewAnnual from './views/view-annual.js';
 import viewExport from './views/view-export.js';
 
-const VIEWS = [viewHoy, viewPMA, viewRecurrences, viewCalendar, viewLoans, viewAnnual, viewMes, viewImportar, viewExport, viewConfig];
+const VIEWS = [viewHoy, viewNomina, viewRecurrences, viewCalendar, viewLoans, viewAnnual, viewMes, viewImportar, viewExport, viewConfig];
 
 function currentRoute(){ return location.hash || '#/hoy'; }
 
