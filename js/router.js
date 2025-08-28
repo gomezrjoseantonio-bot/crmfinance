@@ -6,8 +6,11 @@ import viewConfig from './views/view-config.js';
 import viewPMA from './views/view-pma.js';
 import viewRecurrences from './views/view-recurrences.js';
 import viewCalendar from './views/view-calendar.js';
+import viewLoans from './views/view-loans.js';
+import viewAnnual from './views/view-annual.js';
+import viewExport from './views/view-export.js';
 
-const VIEWS = [viewHoy, viewPMA, viewRecurrences, viewCalendar, viewMes, viewImportar, viewConfig];
+const VIEWS = [viewHoy, viewPMA, viewRecurrences, viewCalendar, viewLoans, viewAnnual, viewMes, viewImportar, viewExport, viewConfig];
 
 function currentRoute(){ return location.hash || '#/hoy'; }
 
