@@ -1,6 +1,16 @@
 import { getProperties, saveProperties, getOperatingCosts, saveOperatingCosts } from '../storage.js';
 import { fmtEUR, parseEuro } from '../utils.js';
 import { exportPropertiesToCSV, exportOperatingCostsToCSV, exportAllDataToCSV, exportPropertiesToPDF } from '../export.js';
+import { 
+  withErrorHandling, 
+  validatePropertyData, 
+  validateOperatingCostData, 
+  confirmAction, 
+  showNotification,
+  createSearchFilter,
+  debounce,
+  createBackup
+} from '../validation.js';
 
 const view = {
   route: '#/propiedades',
@@ -15,6 +25,21 @@ const view = {
           <div class="card">
             <h1>Gestión de Propiedades</h1>
             <div class="small muted">Administra tus propiedades de alquiler con gestión por habitaciones</div>
+            <div style="margin-top: 15px;">
+              <button id="backup-data" class="secondary">💾 Crear Backup</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <h2>Buscar y Filtrar</h2>
+            <div class="search-filter">
+              <input type="text" id="search-properties" class="search-input" placeholder="Buscar propiedades por dirección...">
+              <div class="filter-chips" id="filter-chips"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -24,8 +49,9 @@ const view = {
           <div class="card">
             <h2>Añadir Nueva Propiedad</h2>
             <div class="form-group">
-              <label>Dirección:</label>
+              <label>Dirección: <span style="color: red;">*</span></label>
               <input type="text" id="property-address" placeholder="Calle, número, ciudad" style="width: 100%; margin-bottom: 10px;">
+              <div id="address-error" class="error" style="display: none;"></div>
               
               <label>Tipo de alquiler:</label>
               <select id="rental-type" style="width: 100%; margin-bottom: 10px;">
@@ -34,15 +60,17 @@ const view = {
               </select>
               
               <div id="complete-rental" style="margin-bottom: 10px;">
-                <label>Renta mensual (piso completo):</label>
-                <input type="number" id="complete-rent" placeholder="800" style="width: 150px;">
+                <label>Renta mensual (piso completo): <span style="color: red;">*</span></label>
+                <input type="number" id="complete-rent" placeholder="800" style="width: 150px;" min="0" max="10000">
                 <span class="small muted">€/mes</span>
+                <div id="rent-error" class="error" style="display: none;"></div>
               </div>
               
               <div id="rooms-rental" style="display: none; margin-bottom: 10px;">
                 <label>Número de habitaciones:</label>
                 <input type="number" id="rooms-count" placeholder="3" min="1" max="10" style="width: 80px;">
                 <button id="setup-rooms" class="secondary">Configurar habitaciones</button>
+                <div id="rooms-error" class="error" style="display: none;"></div>
               </div>
               
               <div id="rooms-config" style="display: none; margin-top: 10px;">
@@ -51,7 +79,7 @@ const view = {
               </div>
               
               <div style="margin-top: 15px;">
-                <button id="add-property" class="primary">Añadir Propiedad</button>
+                <button id="add-property" class="primary loading-target">Añadir Propiedad</button>
               </div>
             </div>
           </div>
@@ -69,10 +97,7 @@ const view = {
               <button id="export-pdf" class="secondary" style="margin-left: 10px;">📄 Exportar PDF</button>
             </div>
             <div id="properties-list">
-              ${properties.length === 0 ? 
-                '<div class="small muted">No hay propiedades registradas</div>' :
-                this.renderPropertiesList(properties)
-              }
+              ${this.renderPropertiesList(properties)}
             </div>
           </div>
         </div>
@@ -95,9 +120,14 @@ const view = {
     `;
     
     this.setupEventListeners(root);
+    this.setupSearch(root);
   },
   
   renderPropertiesList(properties) {
+    if (properties.length === 0) {
+      return '<div class="small muted">No hay propiedades registradas</div>';
+    }
+    
     return properties.map(property => `
       <div class="property-item" style="border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 10px; border-radius: 8px;">
         <div style="display: flex; justify-content: between; align-items: center;">
@@ -225,61 +255,56 @@ const view = {
       roomsConfig.style.display = 'block';
     });
     
-    // Add property
-    root.querySelector('#add-property').addEventListener('click', () => {
-      try {
-        const address = root.querySelector('#property-address').value.trim();
-        const type = root.querySelector('#rental-type').value;
+    // Add property with enhanced validation
+    const addPropertyHandler = withErrorHandling(async () => {
+      const address = root.querySelector('#property-address').value.trim();
+      const type = root.querySelector('#rental-type').value;
+      
+      // Clear previous errors
+      root.querySelectorAll('.error').forEach(el => el.style.display = 'none');
+      
+      const property = {
+        id: Date.now().toString(),
+        address,
+        type,
+        createdAt: new Date().toISOString()
+      };
+      
+      if (type === 'complete') {
+        const rent = parseFloat(root.querySelector('#complete-rent').value);
+        property.rent = rent;
+      } else {
+        const roomNames = Array.from(root.querySelectorAll('.room-name')).map(input => input.value.trim());
+        const roomRents = Array.from(root.querySelectorAll('.room-rent')).map(input => parseFloat(input.value));
+        const roomOccupied = Array.from(root.querySelectorAll('.room-occupied')).map(input => input.checked);
         
-        if (!address) {
-          alert('Por favor, introduce la dirección de la propiedad');
-          return;
-        }
-        
-        const property = {
-          id: Date.now().toString(),
-          address,
-          type,
-          createdAt: new Date().toISOString()
-        };
-        
-        if (type === 'complete') {
-          const rent = parseFloat(root.querySelector('#complete-rent').value);
-          if (!rent || rent <= 0) {
-            alert('Por favor, introduce una renta válida');
-            return;
-          }
-          property.rent = rent;
-        } else {
-          const roomNames = Array.from(root.querySelectorAll('.room-name')).map(input => input.value.trim());
-          const roomRents = Array.from(root.querySelectorAll('.room-rent')).map(input => parseFloat(input.value));
-          const roomOccupied = Array.from(root.querySelectorAll('.room-occupied')).map(input => input.checked);
-          
-          if (roomNames.some(name => !name) || roomRents.some(rent => !rent || rent <= 0)) {
-            alert('Por favor, completa todos los datos de las habitaciones');
-            return;
-          }
-          
-          property.rooms = roomNames.map((name, index) => ({
-            id: `${property.id}-room-${index + 1}`,
-            name,
-            rent: roomRents[index],
-            occupied: roomOccupied[index]
-          }));
-        }
-        
-        const properties = getProperties();
-        properties.push(property);
-        saveProperties(properties);
-        
-        alert('Propiedad añadida correctamente');
-        this.mount(root); // Reload the view
-        
-      } catch (error) {
-        console.error('Error adding property:', error);
-        alert('Error al añadir la propiedad. Por favor, revisa los datos introducidos.');
+        property.rooms = roomNames.map((name, index) => ({
+          id: `${property.id}-room-${index + 1}`,
+          name,
+          rent: roomRents[index],
+          occupied: roomOccupied[index]
+        }));
       }
-    });
+      
+      // Validate the property data
+      validatePropertyData(property);
+      
+      const properties = getProperties();
+      properties.push(property);
+      saveProperties(properties);
+      
+      showNotification('Propiedad añadida correctamente', 'success');
+      
+      // Clear form
+      root.querySelector('#property-address').value = '';
+      root.querySelector('#complete-rent').value = '';
+      root.querySelector('#rooms-config').style.display = 'none';
+      
+      this.mount(root); // Reload the view
+      
+    }, 'Error al añadir la propiedad');
+    
+    root.querySelector('#add-property').addEventListener('click', addPropertyHandler);
     
     // Operating costs
     root.querySelector('#add-cost').addEventListener('click', () => {
@@ -296,42 +321,32 @@ const view = {
     
     const saveCostBtn = root.querySelector('#save-cost');
     if (saveCostBtn) {
-      saveCostBtn.addEventListener('click', () => {
-        try {
-          const name = root.querySelector('#cost-name').value.trim();
-          const amount = parseFloat(root.querySelector('#cost-amount').value);
-          const selectedMonths = Array.from(root.querySelectorAll('.month-checkbox:checked')).map(cb => parseInt(cb.value));
-          
-          if (!name || !amount || amount <= 0) {
-            alert('Por favor, introduce el nombre y el importe del coste');
-            return;
-          }
-          
-          if (selectedMonths.length === 0) {
-            alert('Por favor, selecciona al menos un mes');
-            return;
-          }
-          
-          const cost = {
-            id: Date.now().toString(),
-            name,
-            amount,
-            months: selectedMonths,
-            createdAt: new Date().toISOString()
-          };
-          
-          const costs = getOperatingCosts();
-          costs.push(cost);
-          saveOperatingCosts(costs);
-          
-          alert('Coste operativo añadido correctamente');
-          this.mount(root); // Reload the view
-          
-        } catch (error) {
-          console.error('Error adding operating cost:', error);
-          alert('Error al añadir el coste operativo. Por favor, revisa los datos introducidos.');
-        }
-      });
+      const saveCostHandler = withErrorHandling(async () => {
+        const name = root.querySelector('#cost-name').value.trim();
+        const amount = parseFloat(root.querySelector('#cost-amount').value);
+        const selectedMonths = Array.from(root.querySelectorAll('.month-checkbox:checked')).map(cb => parseInt(cb.value));
+        
+        const cost = {
+          id: Date.now().toString(),
+          name,
+          amount,
+          months: selectedMonths,
+          createdAt: new Date().toISOString()
+        };
+        
+        // Validate the cost data
+        validateOperatingCostData(cost);
+        
+        const costs = getOperatingCosts();
+        costs.push(cost);
+        saveOperatingCosts(costs);
+        
+        showNotification('Coste operativo añadido correctamente', 'success');
+        this.mount(root); // Reload the view
+        
+      }, 'Error al añadir el coste operativo');
+      
+      saveCostBtn.addEventListener('click', saveCostHandler);
     }
     
     // Global functions for property management
@@ -341,83 +356,90 @@ const view = {
     };
     
     window.deleteProperty = (id) => {
-      if (confirm('¿Estás seguro de que quieres eliminar esta propiedad?')) {
+      if (confirmAction('Se eliminará esta propiedad permanentemente', true)) {
         try {
           const properties = getProperties();
           const filtered = properties.filter(p => p.id !== id);
           saveProperties(filtered);
-          alert('Propiedad eliminada correctamente');
+          showNotification('Propiedad eliminada correctamente', 'success');
           this.mount(root); // Reload the view
         } catch (error) {
           console.error('Error deleting property:', error);
-          alert('Error al eliminar la propiedad');
+          showNotification('Error al eliminar la propiedad', 'error');
         }
       }
     };
     
     window.deleteCost = (id) => {
-      if (confirm('¿Estás seguro de que quieres eliminar este coste operativo?')) {
+      if (confirmAction('Se eliminará este coste operativo permanentemente', true)) {
         try {
           const costs = getOperatingCosts();
           const filtered = costs.filter(c => c.id !== id);
           saveOperatingCosts(filtered);
-          alert('Coste operativo eliminado correctamente');
+          showNotification('Coste operativo eliminado correctamente', 'success');
           this.mount(root); // Reload the view
         } catch (error) {
           console.error('Error deleting operating cost:', error);
-          alert('Error al eliminar el coste operativo');
+          showNotification('Error al eliminar el coste operativo', 'error');
         }
       }
     };
     
-    // Export functionality
+    // Backup functionality
+    const backupBtn = root.querySelector('#backup-data');
+    if (backupBtn) {
+      backupBtn.addEventListener('click', createBackup);
+    }
+    
+    // Export functionality with enhanced error handling
     const exportPropertiesBtn = root.querySelector('#export-properties-csv');
     if (exportPropertiesBtn) {
-      exportPropertiesBtn.addEventListener('click', () => {
-        try {
-          exportPropertiesToCSV();
-        } catch (error) {
-          console.error('Error in export:', error);
-          alert('Error al exportar las propiedades');
-        }
-      });
+      exportPropertiesBtn.addEventListener('click', withErrorHandling(async () => {
+        exportPropertiesToCSV();
+        showNotification('Propiedades exportadas correctamente', 'success');
+      }, 'Error al exportar las propiedades'));
     }
     
     const exportCostsBtn = root.querySelector('#export-costs-csv');
     if (exportCostsBtn) {
-      exportCostsBtn.addEventListener('click', () => {
-        try {
-          exportOperatingCostsToCSV();
-        } catch (error) {
-          console.error('Error in export:', error);
-          alert('Error al exportar los costes operativos');
-        }
-      });
+      exportCostsBtn.addEventListener('click', withErrorHandling(async () => {
+        exportOperatingCostsToCSV();
+        showNotification('Costes operativos exportados correctamente', 'success');
+      }, 'Error al exportar los costes operativos'));
     }
     
     const exportAllBtn = root.querySelector('#export-all-csv');
     if (exportAllBtn) {
-      exportAllBtn.addEventListener('click', () => {
-        try {
-          exportAllDataToCSV();
-        } catch (error) {
-          console.error('Error in export:', error);
-          alert('Error al exportar todos los datos');
-        }
-      });
+      exportAllBtn.addEventListener('click', withErrorHandling(async () => {
+        exportAllDataToCSV();
+        showNotification('Todos los datos exportados correctamente', 'success');
+      }, 'Error al exportar todos los datos'));
     }
     
     const exportPdfBtn = root.querySelector('#export-pdf');
     if (exportPdfBtn) {
-      exportPdfBtn.addEventListener('click', () => {
-        try {
-          exportPropertiesToPDF();
-        } catch (error) {
-          console.error('Error in export:', error);
-          alert('Error al generar el PDF');
-        }
-      });
+      exportPdfBtn.addEventListener('click', withErrorHandling(async () => {
+        exportPropertiesToPDF();
+        showNotification('PDF generado correctamente', 'success');
+      }, 'Error al generar el PDF'));
     }
+  },
+  
+  setupSearch(root) {
+    const searchInput = root.querySelector('#search-properties');
+    const propertiesList = root.querySelector('#properties-list');
+    
+    if (!searchInput || !propertiesList) return;
+    
+    const debouncedSearch = debounce((searchTerm) => {
+      const allProperties = getProperties();
+      const filteredProperties = createSearchFilter(allProperties, searchTerm, ['address', 'type']);
+      propertiesList.innerHTML = this.renderPropertiesList(filteredProperties);
+    }, 300);
+    
+    searchInput.addEventListener('input', (e) => {
+      debouncedSearch(e.target.value);
+    });
   }
 };
 
