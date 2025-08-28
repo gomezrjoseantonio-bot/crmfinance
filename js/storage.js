@@ -4,6 +4,7 @@ const SETTINGS_KEY = 'fp-settings';
 const REAL_KEY = y => `fp-real-${y}`;
 const ACCOUNTS_KEY = 'fp-accounts';
 const CATEGORIES_KEY = 'fp-categories';
+const BUDGETS_KEY = 'fp-budgets';
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -23,6 +24,15 @@ export function ensureSeed(){
       {id:'food', name:'Alimentación', color:'#8b5cf6', type:'expense'},
       {id:'transport', name:'Transporte', color:'#06b6d4', type:'expense'},
       {id:'entertainment', name:'Ocio', color:'#ec4899', type:'expense'}
+    ]));
+  }
+  if(!LS.getItem(BUDGETS_KEY)){
+    LS.setItem(BUDGETS_KEY, JSON.stringify([
+      {categoryId:'housing', monthlyLimit:1000, alertThreshold:0.8},
+      {categoryId:'utilities', monthlyLimit:200, alertThreshold:0.8},
+      {categoryId:'food', monthlyLimit:600, alertThreshold:0.8},
+      {categoryId:'transport', monthlyLimit:300, alertThreshold:0.8},
+      {categoryId:'entertainment', monthlyLimit:200, alertThreshold:0.8}
     ]));
   }
   if(!LS.getItem(REAL_KEY(year))){
@@ -52,6 +62,93 @@ export function saveReal(rows,y=getYear()){ LS.setItem(REAL_KEY(y), JSON.stringi
 
 export function getCategories(){ return JSON.parse(LS.getItem(CATEGORIES_KEY)||'[]'); }
 export function saveCategories(arr){ LS.setItem(CATEGORIES_KEY, JSON.stringify(arr)); }
+
+export function getBudgets(){ return JSON.parse(LS.getItem(BUDGETS_KEY)||'[]'); }
+export function saveBudgets(arr){ LS.setItem(BUDGETS_KEY, JSON.stringify(arr)); }
+
+export function getBudgetAlerts(y = getYear()) {
+  const rows = getReal(y);
+  const budgets = getBudgets();
+  const categories = getCategories();
+  const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+  
+  // Calculate current month spending by category
+  const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+  const monthlyRows = rows.filter(r => r.date.startsWith(currentMonth));
+  const categorySpending = {};
+  
+  monthlyRows.forEach(row => {
+    if (row.amount < 0 && row.category) { // Only expenses
+      categorySpending[row.category] = (categorySpending[row.category] || 0) + Math.abs(row.amount);
+    }
+  });
+  
+  // Check budget violations
+  const alerts = [];
+  budgets.forEach(budget => {
+    const spent = categorySpending[budget.categoryId] || 0;
+    const category = catMap[budget.categoryId];
+    if (!category) return;
+    
+    const percentage = budget.monthlyLimit > 0 ? spent / budget.monthlyLimit : 0;
+    
+    if (percentage >= 1) {
+      alerts.push({
+        type: 'budget_exceeded',
+        level: 'danger',
+        categoryId: budget.categoryId,
+        categoryName: category.name,
+        spent,
+        limit: budget.monthlyLimit,
+        percentage,
+        message: `Presupuesto superado en ${category.name}: ${fmtEUR(spent)} de ${fmtEUR(budget.monthlyLimit)}`
+      });
+    } else if (percentage >= budget.alertThreshold) {
+      alerts.push({
+        type: 'budget_warning',
+        level: 'warning',
+        categoryId: budget.categoryId,
+        categoryName: category.name,
+        spent,
+        limit: budget.monthlyLimit,
+        percentage,
+        message: `Alerta en ${category.name}: ${(percentage * 100).toFixed(1)}% del presupuesto usado`
+      });
+    }
+  });
+  
+  // Check account thresholds
+  const accounts = getAccounts();
+  const byBank = {};
+  rows.forEach(row => {
+    if (row.bank) {
+      byBank[row.bank] = (byBank[row.bank] || 0) + row.amount;
+    }
+  });
+  
+  accounts.forEach(account => {
+    const balance = byBank[account.id] || 0;
+    if (balance < account.threshold) {
+      alerts.push({
+        type: 'account_threshold',
+        level: 'warning',
+        accountId: account.id,
+        accountName: account.name,
+        balance,
+        threshold: account.threshold,
+        message: `Saldo bajo en ${account.name}: ${fmtEUR(balance)} (umbral: ${fmtEUR(account.threshold)})`
+      });
+    }
+  });
+  
+  return alerts;
+}
+
+// Import fmtEUR for alerts - note this creates a circular dependency, but it's acceptable for this use case
+function fmtEUR(n) {
+  return new Intl.NumberFormat('es-ES', {style:'currency', currency:'EUR', minimumFractionDigits:2})
+    .format(+n||0).replace('\u00a0',' ');
+}
 
 export function applyTheme(){
   const s=getSettings();
