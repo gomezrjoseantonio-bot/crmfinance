@@ -736,3 +736,280 @@ function showPartialAmortizationCalculator(loan) {
   
   detailsContainer.scrollIntoView({ behavior: 'smooth' });
 }
+
+window.calculatePartialAmortizationResults = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  const extraAmount = parseFloat(document.querySelector('#extraAmount').value);
+  const monthToAmortize = parseInt(document.querySelector('#monthToAmortize').value);
+  const amortizationType = document.querySelector('#amortizationType').value;
+  
+  if (!extraAmount || extraAmount <= 0) {
+    alert('Introduce un importe válido para amortizar');
+    return;
+  }
+  
+  if (!monthToAmortize || monthToAmortize <= 0) {
+    alert('Introduce un mes válido');
+    return;
+  }
+  
+  // Get current loan state
+  const currentState = calculateCurrentLoanState(loan);
+  
+  if (currentState.isComplete) {
+    alert('El préstamo ya está completado');
+    return;
+  }
+  
+  if (monthToAmortize > currentState.monthsRemaining) {
+    alert('El mes especificado supera la duración restante del préstamo');
+    return;
+  }
+  
+  // Get balance at the specified month from current schedule
+  const balanceAtMonth = monthToAmortize <= currentState.currentSchedule.length ? 
+                        currentState.currentSchedule[monthToAmortize - 1].balance : 0;
+  const newBalance = balanceAtMonth - extraAmount;
+  
+  if (newBalance <= 0) {
+    const totalNeeded = balanceAtMonth;
+    const interestSavings = currentState.currentSchedule.slice(monthToAmortize).reduce((sum, p) => sum + p.interest, 0);
+    
+    document.querySelector('#amortizationResults').innerHTML = `
+      <div style="background:var(--success); color:white; padding:15px; border-radius:8px">
+        <h3>🎉 ¡Préstamo cancelado completamente!</h3>
+        <p>Con ${fmtEUR(extraAmount)} en el mes ${monthToAmortize}, cancelas toda la deuda restante.</p>
+        <p><strong>Importe necesario:</strong> ${fmtEUR(totalNeeded)}</p>
+        <p><strong>Ahorro total:</strong> ${fmtEUR(interestSavings)}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Calculate new schedule after partial amortization
+  const remainingMonthsAfterAmortization = currentState.monthsRemaining - monthToAmortize;
+  const newSchedule = calculateFrenchAmortization(newBalance, loan.effectiveRate / 100, remainingMonthsAfterAmortization / 12);
+  
+  // Calculate savings
+  const originalInterestAfterMonth = currentState.currentSchedule.slice(monthToAmortize).reduce((sum, p) => sum + p.interest, 0);
+  const newInterestAfterMonth = newSchedule.reduce((sum, p) => sum + p.interest, 0);
+  const interestSavings = originalInterestAfterMonth - newInterestAfterMonth;
+  
+  let resultsHTML = '';
+  
+  if (amortizationType === 'reduce_term') {
+    // Reduce term: keep same payment but reduce duration
+    const newDuration = newSchedule.length;
+    const monthsReduced = remainingMonthsAfterAmortization - newDuration;
+    
+    resultsHTML = `
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:15px">
+        <h3>📉 Resultado: Reducir plazo</h3>
+        <div class="row">
+          <div class="col">
+            <div class="small muted">Cuota mensual</div>
+            <div><strong>${fmtEUR(newSchedule[0]?.payment || 0)}</strong> (igual)</div>
+          </div>
+          <div class="col">
+            <div class="small muted">Plazo reducido</div>
+            <div><strong>${monthsReduced} meses</strong> (${(monthsReduced/12).toFixed(1)} años)</div>
+          </div>
+          <div class="col">
+            <div class="small muted">Ahorro en intereses</div>
+            <div style="color:green; font-weight:bold">${fmtEUR(interestSavings)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px; font-size:14px; color:var(--muted)">
+          Nueva duración total restante: ${monthToAmortize + newDuration} meses (vs ${currentState.monthsRemaining} original)
+        </div>
+      </div>
+    `;
+  } else {
+    // Reduce payment: calculate what the new payment would be with same term
+    const newScheduleKeepTerm = calculateFrenchAmortization(newBalance, loan.effectiveRate / 100, remainingMonthsAfterAmortization / 12);
+    const newPayment = newScheduleKeepTerm[0]?.payment || 0;
+    const originalPayment = currentState.monthlyPayment;
+    const paymentReduction = originalPayment - newPayment;
+    
+    resultsHTML = `
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:15px">
+        <h3>💰 Resultado: Reducir cuota</h3>
+        <div class="row">
+          <div class="col">
+            <div class="small muted">Nueva cuota mensual</div>
+            <div><strong>${fmtEUR(newPayment)}</strong></div>
+          </div>
+          <div class="col">
+            <div class="small muted">Reducción mensual</div>
+            <div style="color:green; font-weight:bold">-${fmtEUR(paymentReduction)}</div>
+          </div>
+          <div class="col">
+            <div class="small muted">Ahorro en intereses</div>
+            <div style="color:green; font-weight:bold">${fmtEUR(interestSavings)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px; font-size:14px; color:var(--muted)">
+          Duración: ${remainingMonthsAfterAmortization} meses restantes (igual plazo)
+        </div>
+      </div>
+    `;
+  }
+  
+  document.querySelector('#amortizationResults').innerHTML = resultsHTML;
+};
+
+window.calculateTotalCancellation = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  const monthToCancel = parseInt(document.querySelector('#monthToAmortize').value) || 1;
+  const currentState = calculateCurrentLoanState(loan);
+  
+  if (currentState.isComplete) {
+    alert('El préstamo ya está completado');
+    return;
+  }
+  
+  if (monthToCancel > currentState.monthsRemaining) {
+    alert('El mes especificado supera la duración restante del préstamo');
+    return;
+  }
+  
+  // Get balance at the specified month from current schedule
+  const balanceAtMonth = monthToCancel <= currentState.currentSchedule.length ? 
+                        currentState.currentSchedule[monthToCancel - 1].balance : 0;
+  const remainingInterest = currentState.currentSchedule.slice(monthToCancel).reduce((sum, p) => sum + p.interest, 0);
+  
+  document.querySelector('#amortizationResults').innerHTML = `
+    <div style="background:var(--warning); color:white; padding:15px; border-radius:8px">
+      <h3>🏁 Cancelación total en el mes ${monthToCancel} (desde hoy)</h3>
+      <div class="row">
+        <div class="col">
+          <div class="small" style="opacity:0.9">Importe para cancelar</div>
+          <div style="font-size:20px; font-weight:bold">${fmtEUR(balanceAtMonth)}</div>
+        </div>
+        <div class="col">
+          <div class="small" style="opacity:0.9">Ahorro en intereses</div>
+          <div style="font-size:18px; font-weight:bold">${fmtEUR(remainingInterest)}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:14px; opacity:0.9">
+        Te ahorrarías ${currentState.monthsRemaining - monthToCancel} cuotas restantes
+      </div>
+    </div>
+  `;
+};
+
+window.showCurrentAmortizationTable = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  const currentState = calculateCurrentLoanState(loan);
+  const container = document.querySelector('#amortizationTableContainer');
+  
+  // Show full schedule with current position marked
+  const allSchedule = currentState.originalSchedule;
+  const monthsElapsed = currentState.monthsElapsed;
+  
+  const tableRows = allSchedule.map((payment, index) => {
+    const isPaid = index < monthsElapsed;
+    const isCurrent = index === monthsElapsed;
+    const style = isPaid ? 'background-color: #e8f5e8; opacity: 0.7;' : 
+                  isCurrent ? 'background-color: #fff3cd; font-weight: bold;' : '';
+    
+    return `
+      <tr style="${style}">
+        <td>${payment.month}${isPaid ? ' ✓' : isCurrent ? ' ◄' : ''}</td>
+        <td>${fmtEUR(payment.payment)}</td>
+        <td>${fmtEUR(payment.principal)}</td>
+        <td>${fmtEUR(payment.interest)}</td>
+        <td>${fmtEUR(payment.balance)}</td>
+        <td>${isPaid ? 'Pagado' : isCurrent ? 'Actual' : 'Pendiente'}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  container.innerHTML = `
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h3>📋 Cuadro de Amortización Completo - ${loan.description}</h3>
+          <div class="small muted">
+            ✓ = Pagado, ◄ = Próximo pago, Total pagado: ${fmtEUR(currentState.totalPaid)}
+          </div>
+          
+          <div style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Cuota</th>
+                  <th>Capital</th>
+                  <th>Interés</th>
+                  <th>Pendiente</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>
+          
+          <div style="margin-top:15px">
+            <button onclick="exportAmortizationTable('${loanId}')" class="primary">📊 Exportar</button>
+            <button onclick="document.querySelector('#amortizationTableContainer').style.display='none'" style="margin-left:10px">❌ Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  container.style.display = 'block';
+  container.scrollIntoView({ behavior: 'smooth' });
+};
+
+window.exportAmortizationTable = function(loanId) {
+  const loans = getLoans();
+  const loan = loans.find(l => l.id === loanId);
+  if (!loan) return;
+  
+  const currentState = calculateCurrentLoanState(loan);
+  const schedule = currentState.originalSchedule;
+  
+  // Create CSV content
+  let csvContent = 'Mes,Cuota,Capital,Interés,Pendiente,Estado\n';
+  
+  schedule.forEach((payment, index) => {
+    const isPaid = index < currentState.monthsElapsed;
+    const isCurrent = index === currentState.monthsElapsed;
+    const status = isPaid ? 'Pagado' : isCurrent ? 'Actual' : 'Pendiente';
+    
+    csvContent += `${payment.month},${payment.payment.toFixed(2)},${payment.principal.toFixed(2)},${payment.interest.toFixed(2)},${payment.balance.toFixed(2)},${status}\n`;
+  });
+  
+  // Add summary information
+  csvContent += '\n\nResumen del préstamo:\n';
+  csvContent += `Descripción,${loan.description}\n`;
+  csvContent += `Capital inicial,${loan.principal.toFixed(2)}\n`;
+  csvContent += `Tipo efectivo,${loan.effectiveRate.toFixed(2)}%\n`;
+  csvContent += `Meses transcurridos,${currentState.monthsElapsed}\n`;
+  csvContent += `Meses restantes,${currentState.monthsRemaining}\n`;
+  csvContent += `Capital pendiente,${currentState.currentBalance.toFixed(2)}\n`;
+  csvContent += `Total pagado,${currentState.totalPaid.toFixed(2)}\n`;
+  csvContent += `Intereses pagados,${currentState.interestPaid.toFixed(2)}\n`;
+  
+  // Create download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `amortizacion_${loan.description.replace(/\s+/g, '_')}_${fmtDateISO(new Date())}.csv`;
+  link.click();
+};
+
+export default view;
