@@ -1,5 +1,5 @@
-import { saveReal, getReal, getYear, getRecurrences, saveRecurrences, getPMA, savePMA, getProperties } from '../storage.js';
-import { fmtEUR, parseEuro } from '../utils.js';
+import { saveReal, getReal, getYear, getRecurrences, saveRecurrences, getPMA, savePMA, getProperties, saveProperties, getBudgets, saveBudgets, getCategories } from '../storage.js';
+import { fmtEUR, parseEuro, groupBy } from '../utils.js';
 import { parseXLSX, parseXLS } from '../../vendor/xlsx-lite.js';
 
 function parseCSV(text){
@@ -35,11 +35,32 @@ async function readFile(file){
 }
 
 const view = {
-  route:'#/export', title:'Reportes',
+  route:'#/datos', title:'Gestión de Datos',
   async mount(root){
+    // Get data for reports
+    const rows = getReal();
+    const categories = getCategories();
+    const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
+    
+    // Calculate category totals
+    const byCategory = groupBy(rows, r => r.category || 'sin_categoria');
+    const categoryData = Object.entries(byCategory).map(([catId, items]) => {
+      const total = items.reduce((sum, item) => sum + Math.abs(item.amount), 0);
+      const cat = catMap[catId] || {name: 'Sin categoría', color: '#gray'};
+      return { id: catId, name: cat.name, color: cat.color, total, type: cat.type };
+    });
+    
+    // Calculate monthly data
+    const byMonth = groupBy(rows, r => r.date.substring(0, 7)); // YYYY-MM
+    const monthlyData = Object.entries(byMonth).sort().map(([month, items]) => {
+      const income = items.filter(x => x.amount > 0).reduce((sum, x) => sum + x.amount, 0);
+      const expenses = items.filter(x => x.amount < 0).reduce((sum, x) => sum + Math.abs(x.amount), 0);
+      return { month, income, expenses, net: income - expenses };
+    });
+
     root.innerHTML = `<div class="row"><div class="col"><div class="card">
-      <h1>📊 Reportes y Exportaciones</h1>
-      <div class="small muted">Gestión completa de datos con validación, mapeo y exportaciones avanzadas</div>
+      <h1>📊 Gestión de Datos</h1>
+      <div class="small muted">Importación, exportación y análisis completo de datos financieros</div>
       
       <div class="row" style="margin-top:20px">
         <div class="col">
@@ -48,9 +69,11 @@ const view = {
           <div style="margin:10px 0">
             <label class="small muted">Tipo de datos</label><br/>
             <select id="importType" style="width:200px">
-              <option value="movements">Movimientos</option>
+              <option value="movements">Movimientos bancarios</option>
               <option value="recurrences">Recurrencias</option>
               <option value="salary">Plan de nómina</option>
+              <option value="budgets">Presupuestos</option>
+              <option value="rentals">Rentas</option>
             </select>
           </div>
           
@@ -68,8 +91,9 @@ const view = {
         </div>
         
         <div class="col">
-          <h2>📤 Exportar datos</h2>
+          <h2>📤 Exportar reportes</h2>
           
+          <h3>📋 Reportes Básicos</h3>
           <div style="margin:10px 0">
             <button id="exportCSV" class="primary">📊 Exportar movimientos CSV</button>
           </div>
@@ -78,7 +102,7 @@ const view = {
             <button id="exportJSON">💾 Backup completo JSON</button>
           </div>
           
-          <h3 style="margin-top:20px; margin-bottom:10px;">🏠 Exportaciones de Inmuebles</h3>
+          <h3 style="margin-top:20px; margin-bottom:10px;">🏠 Reportes de Inmuebles</h3>
           
           <div style="margin:10px 0">
             <button id="exportPropertiesXLS" class="primary">📊 Exportar Propiedades (XLS)</button>
@@ -101,6 +125,56 @@ const view = {
           </div>
           
           <div id="exportResult" style="margin-top:15px"></div>
+        </div>
+      </div>
+      
+      <div class="row" style="margin-top:30px">
+        <div class="col">
+          <div class="card">
+            <h2>📈 Análisis Visual</h2>
+            <div class="small muted">Gráficos y tendencias de tus finanzas</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <h3>Gastos por Categoría</h3>
+            <canvas id="categoryChart" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card">
+            <h3>Tendencia Mensual</h3>
+            <canvas id="monthlyChart" width="400" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <h3>Resumen por Categorías</h3>
+            <div class="grid">
+              <table>
+                <thead>
+                  <tr><th>Categoría</th><th>Total</th><th>Porcentaje</th></tr>
+                </thead>
+                <tbody>
+                  ${categoryData.map(cat => {
+                    const total = categoryData.reduce((sum, c) => sum + c.total, 0);
+                    const percentage = total > 0 ? ((cat.total / total) * 100).toFixed(1) : 0;
+                    return `<tr>
+                      <td><span style="color:${cat.color}">●</span> ${cat.name}</td>
+                      <td>${fmtEUR(cat.total)}</td>
+                      <td>${percentage}%</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -144,6 +218,11 @@ const view = {
     root.querySelector('#exportPDF').onclick = () => {
       exportPDF(root);
     };
+    
+    // Initialize charts
+    requestAnimationFrame(() => {
+      initCharts(categoryData, monthlyData);
+    });
   }
 };
 
@@ -203,6 +282,19 @@ function getFieldsForType(type) {
       { key: 'month', label: 'Mes', required: true, autoDetect: 'mes' },
       { key: 'gross', label: 'Bruto', required: true, autoDetect: 'bruto' },
       { key: 'variable', label: 'Variable', required: false, autoDetect: 'variable' }
+    ],
+    budgets: [
+      { key: 'category', label: 'Categoría', required: true, autoDetect: 'categoria' },
+      { key: 'amount', label: 'Presupuesto', required: true, autoDetect: 'presupuesto' },
+      { key: 'month', label: 'Mes', required: false, autoDetect: 'mes' },
+      { key: 'description', label: 'Descripción', required: false, autoDetect: 'descripcion' }
+    ],
+    rentals: [
+      { key: 'property', label: 'Propiedad', required: true, autoDetect: 'propiedad' },
+      { key: 'tenant', label: 'Inquilino', required: true, autoDetect: 'inquilino' },
+      { key: 'amount', label: 'Renta', required: true, autoDetect: 'renta' },
+      { key: 'date', label: 'Fecha', required: true, autoDetect: 'fecha' },
+      { key: 'contract', label: 'Contrato', required: false, autoDetect: 'contrato' }
     ]
   };
   
@@ -238,6 +330,12 @@ function confirmImport(root, data, headers) {
         break;
       case 'salary':
         importSalaryPlan(validData);
+        break;
+      case 'budgets':
+        importBudgets(validData);
+        break;
+      case 'rentals':
+        importRentals(validData);
         break;
       default:
         throw new Error('Tipo de importación no soportado');
@@ -337,6 +435,66 @@ function importSalaryPlan(data) {
   });
   
   savePMA(pma);
+}
+
+function importBudgets(data) {
+  const existing = getBudgets();
+  const newBudgets = data.map(row => ({
+    category: row.category,
+    amount: parseEuro(row.amount),
+    month: row.month || 'all',
+    description: row.description || '',
+    id: Date.now().toString() + Math.random()
+  }));
+  
+  saveBudgets([...existing, ...newBudgets]);
+}
+
+function importRentals(data) {
+  const existing = getProperties();
+  
+  // Group rental data by property for updating existing properties
+  const rentalsByProperty = {};
+  data.forEach(row => {
+    const propertyName = row.property;
+    if (!rentalsByProperty[propertyName]) {
+      rentalsByProperty[propertyName] = [];
+    }
+    rentalsByProperty[propertyName].push({
+      tenant: row.tenant,
+      amount: parseEuro(row.amount),
+      date: row.date,
+      contract: row.contract || ''
+    });
+  });
+  
+  // Update existing properties or create new ones
+  Object.entries(rentalsByProperty).forEach(([propertyName, rentals]) => {
+    let property = existing.find(p => p.address === propertyName || p.id === propertyName);
+    
+    if (!property) {
+      // Create new property
+      property = {
+        id: Date.now().toString() + Math.random(),
+        address: propertyName,
+        city: '',
+        postalCode: '',
+        region: '',
+        monthlyRent: rentals[0]?.amount || 0,
+        rentals: rentals
+      };
+      existing.push(property);
+    } else {
+      // Update existing property
+      property.rentals = property.rentals || [];
+      property.rentals.push(...rentals);
+      if (rentals.length > 0) {
+        property.monthlyRent = rentals[rentals.length - 1].amount;
+      }
+    }
+  });
+  
+  saveProperties(existing);
 }
 
 function showValidationErrors(root, errors) {
@@ -899,6 +1057,141 @@ function downloadFile(content, filename, mimeType) {
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
+}
+
+function initCharts(categoryData, monthlyData) {
+  // Simple Canvas-based chart implementation
+  drawPieChart('categoryChart', categoryData);
+  drawLineChart('monthlyChart', monthlyData);
+}
+
+function drawPieChart(canvasId, data) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || data.length === 0) return;
+  
+  const ctx = canvas.getContext('2d');
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = Math.min(centerX, centerY) - 60; // More space for legend
+  
+  const total = data.reduce((sum, item) => sum + item.total, 0);
+  if (total === 0) return;
+  
+  let currentAngle = -Math.PI / 2; // Start at top
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  data.forEach((item, index) => {
+    const sliceAngle = (item.total / total) * 2 * Math.PI;
+    
+    // Draw slice
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+    ctx.fillStyle = item.color;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    currentAngle += sliceAngle;
+  });
+  
+  // Draw legend
+  data.forEach((item, index) => {
+    const y = 10 + index * 20;
+    ctx.fillStyle = item.color;
+    ctx.fillRect(10, y, 15, 15);
+    ctx.fillStyle = getComputedStyle(document.body).color || '#333';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`${item.name} (${((item.total / total) * 100).toFixed(1)}%)`, 30, y + 12);
+  });
+}
+
+function drawLineChart(canvasId, data) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || data.length === 0) return;
+  
+  const ctx = canvas.getContext('2d');
+  const padding = 50;
+  const chartWidth = canvas.width - padding * 2;
+  const chartHeight = canvas.height - padding * 2;
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const maxValue = Math.max(...data.map(d => Math.max(d.income, d.expenses, Math.abs(d.net))));
+  if (maxValue === 0) return;
+  
+  const stepX = data.length > 1 ? chartWidth / (data.length - 1) : 0;
+  
+  // Draw grid and axes
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  
+  // Horizontal grid lines
+  for (let i = 0; i <= 4; i++) {
+    const y = padding + (chartHeight * i / 4);
+    ctx.beginPath();
+    ctx.moveTo(padding, y);
+    ctx.lineTo(padding + chartWidth, y);
+    ctx.stroke();
+    
+    // Y-axis labels
+    const value = maxValue - (maxValue * i / 4);
+    ctx.fillStyle = getComputedStyle(document.body).color || '#333';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(value), padding - 5, y + 3);
+  }
+  
+  // Draw lines
+  const datasets = [
+    { key: 'income', color: '#10b981', label: 'Ingresos' },
+    { key: 'expenses', color: '#ef4444', label: 'Gastos' },
+    { key: 'net', color: '#7c3aed', label: 'Neto' }
+  ];
+  
+  datasets.forEach(dataset => {
+    ctx.strokeStyle = dataset.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    
+    data.forEach((point, index) => {
+      const x = padding + index * stepX;
+      const value = dataset.key === 'net' ? Math.abs(point.net) : point[dataset.key];
+      const y = padding + chartHeight - ((value / maxValue) * chartHeight);
+      
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+      
+      // Draw point
+      ctx.save();
+      ctx.fillStyle = dataset.color;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+    });
+    
+    ctx.stroke();
+  });
+  
+  // Draw legend
+  datasets.forEach((dataset, index) => {
+    const x = 10;
+    const y = 15 + index * 20;
+    ctx.fillStyle = dataset.color;
+    ctx.fillRect(x, y, 15, 15);
+    ctx.fillStyle = getComputedStyle(document.body).color || '#333';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(dataset.label, x + 20, y + 12);
+  });
 }
 
 export default view;
