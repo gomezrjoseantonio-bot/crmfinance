@@ -67,7 +67,7 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
   return months.map((month, index) => {
     const monthNum = index + 1;
     const isExtraPayMonth = salaryConfig.extraPayMonths?.includes(monthNum);
-    const isVariableMonth = monthNum === 7 || monthNum === 12;
+    const isVariableMonth = salaryConfig.variableMonths?.includes(monthNum);
     const isBonusMonth = monthNum === salaryConfig.bonusMonth;
     
     let salaryBase = monthlyBase;
@@ -80,7 +80,8 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
     }
     
     if (isVariableMonth && salaryConfig.variablePercent > 0) {
-      const variablePercent = salaryConfig.variableDistribution[monthNum] || 0;
+      const monthKey = salaryConfig.variableMonths.indexOf(monthNum);
+      const variablePercent = monthKey === 0 ? salaryConfig.variableDistribution.month1 : salaryConfig.variableDistribution.month2;
       variable = (salaryConfig.grossAnnual * salaryConfig.variablePercent / 100) * (variablePercent / 100);
     }
     
@@ -100,7 +101,6 @@ function generateMonthlyBreakdown(salaryConfig, salaryData, year) {
         <td>${fmtEUR(extraPay)}</td>
         <td>${fmtEUR(monthlyDeductions)}</td>
         <td><strong>${fmtEUR(monthlyNet)}</strong></td>
-        <td><input type="number" class="monthly-adjustment" data-month="${monthNum}" value="0" style="width:80px" step="0.01"></td>
       </tr>
     `;
   }).join('');
@@ -111,6 +111,118 @@ function generateNominaForecast(salaryConfig, year) {
   // This will integrate with the existing forecast system
   // Implementation will be done in the forecast-generator.js
   console.log('Generating nomina forecast for year:', year, salaryConfig);
+}
+
+// Export nómina calculation to Excel
+function exportNominaToExcel(salaryConfig, salaryData, year) {
+  const months = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  
+  // Create CSV content that Excel can read
+  const csvContent = [
+    // Header information
+    [`Cálculo de Nómina ${year}`],
+    [],
+    ['CONFIGURACIÓN DE NÓMINA'],
+    ['Salario Bruto Anual', fmtEUR(salaryConfig.grossAnnual)],
+    ['Número de Pagas', salaryConfig.numPayments],
+    ['% Variable', `${salaryConfig.variablePercent}%`],
+    ['Mes Variable 1', months[salaryConfig.variableMonths[0] - 1], `${salaryConfig.variableDistribution?.month1 || 40}%`],
+    ['Mes Variable 2', months[salaryConfig.variableMonths[1] - 1], `${salaryConfig.variableDistribution?.month2 || 60}%`],
+    ['% Bono Extra', `${salaryConfig.bonusPercent}%`],
+    ['Mes Bono', months[salaryConfig.bonusMonth - 1]],
+    [],
+    ['CÁLCULOS ANUALES'],
+    ['Total Salario Económico', fmtEUR(salaryData.totalEconomic)],
+    ['Seguridad Social', fmtEUR(salaryData.ssContribution)],
+    ['Desempleo', fmtEUR(salaryData.unemploymentContribution)],
+    ['Formación', fmtEUR(salaryData.trainingContribution)],
+    ['IRPF', fmtEUR(salaryData.irpfContribution)],
+    ['Total Deducciones', fmtEUR(salaryData.totalDeductions)],
+    ['Total a Percibir', fmtEUR(salaryData.netTotal)],
+    ['Salario Mensual Promedio', fmtEUR(salaryData.netMonthly)]
+  ];
+  
+  const csvText = csvContent.map(row => row.join(';')).join('\n');
+  downloadFile(csvText, `nomina-calculo-${year}.csv`, 'text/csv');
+  alert('✅ Cálculo de nómina exportado a Excel');
+}
+
+// Export monthly breakdown to Excel
+function exportMonthlyBreakdownToExcel(salaryConfig, salaryData, year) {
+  const months = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+  
+  const monthlyBase = salaryConfig.grossAnnual / salaryConfig.numPayments;
+  const monthlyDeductions = salaryData.totalDeductions / 12;
+  
+  // Create headers
+  const csvContent = [
+    [`Desglose Mensual de Nómina ${year}`],
+    [],
+    ['Mes', 'Salario Base', 'Variable', 'Bono', 'Paga Extra', 'Deducciones', 'Neto Total']
+  ];
+  
+  // Add monthly data
+  months.forEach((month, index) => {
+    const monthNum = index + 1;
+    const isExtraPayMonth = salaryConfig.extraPayMonths?.includes(monthNum);
+    const isVariableMonth = salaryConfig.variableMonths?.includes(monthNum);
+    const isBonusMonth = monthNum === salaryConfig.bonusMonth;
+    
+    let salaryBase = monthlyBase;
+    let variable = 0;
+    let bonus = 0;
+    let extraPay = 0;
+    
+    if (isExtraPayMonth && salaryConfig.numPayments === 14) {
+      extraPay = monthlyBase;
+    }
+    
+    if (isVariableMonth && salaryConfig.variablePercent > 0) {
+      const monthKey = salaryConfig.variableMonths.indexOf(monthNum);
+      const variablePercent = monthKey === 0 ? salaryConfig.variableDistribution.month1 : salaryConfig.variableDistribution.month2;
+      variable = (salaryConfig.grossAnnual * salaryConfig.variablePercent / 100) * (variablePercent / 100);
+    }
+    
+    if (isBonusMonth && salaryConfig.bonusPercent > 0) {
+      bonus = salaryConfig.grossAnnual * salaryConfig.bonusPercent / 100;
+    }
+    
+    const monthlyGross = salaryBase + variable + bonus + extraPay;
+    const monthlyNet = monthlyGross - monthlyDeductions;
+    
+    csvContent.push([
+      month,
+      fmtEUR(salaryBase).replace('€', '').trim(),
+      fmtEUR(variable).replace('€', '').trim(),
+      fmtEUR(bonus).replace('€', '').trim(),
+      fmtEUR(extraPay).replace('€', '').trim(),
+      fmtEUR(monthlyDeductions).replace('€', '').trim(),
+      fmtEUR(monthlyNet).replace('€', '').trim()
+    ]);
+  });
+  
+  const csvText = csvContent.map(row => row.join(';')).join('\n');
+  downloadFile(csvText, `nomina-mensual-${year}.csv`, 'text/csv');
+  alert('✅ Tabla mensual exportada a Excel');
+}
+
+// Helper function to download files
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 }
 
 const view = {
@@ -130,7 +242,8 @@ const view = {
         numPayments: 14,
         extraPayMonths: [7, 12], // Julio y Diciembre
         variablePercent: 30,
-        variableDistribution: { 7: 40, 12: 60 }, // Julio 40%, Diciembre 60%
+        variableMonths: [7, 12], // Meses de pago variable
+        variableDistribution: { month1: 40, month2: 60 }, // Distribución entre los meses seleccionados
         bonusPercent: 0,
         bonusMonth: 4, // Abril
         company: '',
@@ -145,7 +258,8 @@ const view = {
     // Ensure new fields exist for backwards compatibility
     if (!nomina.salary.numPayments) nomina.salary.numPayments = 14;
     if (!nomina.salary.variablePercent) nomina.salary.variablePercent = 0;
-    if (!nomina.salary.variableDistribution) nomina.salary.variableDistribution = {};
+    if (!nomina.salary.variableMonths) nomina.salary.variableMonths = [7, 12];
+    if (!nomina.salary.variableDistribution) nomina.salary.variableDistribution = { month1: 40, month2: 60 };
     if (!nomina.salary.bonusPercent) nomina.salary.bonusPercent = 0;
     if (!nomina.salary.bonusMonth) nomina.salary.bonusMonth = 4;
     if (!nomina.salary.company) nomina.salary.company = '';
@@ -259,12 +373,28 @@ const view = {
               <h3>Distribución del variable</h3>
               <div class="row">
                 <div class="col">
-                  <label class="small muted">Mes pago variable 1 (Julio)</label><br/>
-                  <input type="number" id="variableJulio" value="${nomina.salary.variableDistribution[7] || 40}" min="0" max="100" style="width:60px">%
+                  <label class="small muted">Mes pago variable 1</label><br/>
+                  <select id="variableMonth1" style="width:140px">
+                    ${Array.from({length: 12}, (_, i) => {
+                      const month = i + 1;
+                      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const selected = nomina.salary.variableMonths[0] === month ? 'selected' : '';
+                      return `<option value="${month}" ${selected}>${monthNames[i]}</option>`;
+                    }).join('')}
+                  </select>
+                  <input type="number" id="variablePercent1" value="${nomina.salary.variableDistribution.month1 || 40}" min="0" max="100" style="width:60px; margin-left:10px">%
                 </div>
                 <div class="col">
-                  <label class="small muted">Mes pago variable 2 (Diciembre)</label><br/>
-                  <input type="number" id="variableDiciembre" value="${nomina.salary.variableDistribution[12] || 60}" min="0" max="100" style="width:60px">%
+                  <label class="small muted">Mes pago variable 2</label><br/>
+                  <select id="variableMonth2" style="width:140px">
+                    ${Array.from({length: 12}, (_, i) => {
+                      const month = i + 1;
+                      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      const selected = nomina.salary.variableMonths[1] === month ? 'selected' : '';
+                      return `<option value="${month}" ${selected}>${monthNames[i]}</option>`;
+                    }).join('')}
+                  </select>
+                  <input type="number" id="variablePercent2" value="${nomina.salary.variableDistribution.month2 || 60}" min="0" max="100" style="width:60px; margin-left:10px">%
                 </div>
               </div>
             </div>
@@ -386,6 +516,7 @@ const view = {
             
             <button id="saveNomina" class="primary" style="margin-top:15px; width:100%">💾 Guardar nómina</button>
             <button id="generateForecast" class="secondary" style="margin-top:8px; width:100%">📊 Generar previsión de ingresos</button>
+            <button id="exportNominaExcel" class="secondary" style="margin-top:8px; width:100%">📤 Exportar a Excel</button>
           </div>
         </div>
       </div>
@@ -394,7 +525,7 @@ const view = {
         <div class="col">
           <div class="card">
             <h2>📊 Vista mensual detallada</h2>
-            <div class="small muted">Previsión mensual con posibilidad de ajustes manuales</div>
+            <div class="small muted">Previsión mensual sin ajustes manuales. Para modificar, edita la configuración y reprocesa.</div>
             
             <div id="monthlyBreakdown" style="margin-top:15px">
               <table class="table">
@@ -407,13 +538,17 @@ const view = {
                     <th>Paga extra</th>
                     <th>Deducciones</th>
                     <th>Neto</th>
-                    <th>Ajuste manual</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${generateMonthlyBreakdown(nomina.salary, salaryData, currentYear)}
                 </tbody>
               </table>
+            </div>
+            
+            <div style="margin-top:15px">
+              <button id="exportMonthlyExcel" class="secondary" style="margin-right:10px">📤 Exportar tabla mensual a Excel</button>
+              <button id="searchModifyNomina" class="secondary">🔍 Buscar y modificar nómina existente</button>
             </div>
           </div>
         </div>
@@ -507,9 +642,14 @@ const view = {
         nomina.salary.extraPayMonths = [];
       }
       
+      nomina.salary.variableMonths = [
+        parseInt(root.querySelector('#variableMonth1').value),
+        parseInt(root.querySelector('#variableMonth2').value)
+      ];
+      
       nomina.salary.variableDistribution = {
-        7: parseFloat(root.querySelector('#variableJulio').value) || 40,
-        12: parseFloat(root.querySelector('#variableDiciembre').value) || 60
+        month1: parseFloat(root.querySelector('#variablePercent1').value) || 40,
+        month2: parseFloat(root.querySelector('#variablePercent2').value) || 60
       };
       
       nomina.salary.socialBenefits.flexiplan = {
@@ -536,6 +676,24 @@ const view = {
       saveTaxTables(updatedTaxTables);
       alert('📋 Tablas fiscales guardadas correctamente');
       view.mount(root); // Refresh to show updated calculations
+    };
+    
+    // Export handlers
+    root.querySelector('#exportNominaExcel').onclick = () => {
+      exportNominaToExcel(nomina.salary, salaryData, currentYear);
+    };
+    
+    root.querySelector('#exportMonthlyExcel').onclick = () => {
+      exportMonthlyBreakdownToExcel(nomina.salary, salaryData, currentYear);
+    };
+    
+    root.querySelector('#searchModifyNomina').onclick = () => {
+      // Allow user to search and modify existing nómina
+      const year = prompt('Introduce el año de la nómina a buscar/modificar:', currentYear);
+      if (year && parseInt(year) !== currentYear) {
+        setYear(parseInt(year));
+        view.mount(root);
+      }
     };
   }
 };
