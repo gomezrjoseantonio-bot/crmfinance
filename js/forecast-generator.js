@@ -2,72 +2,55 @@ import { getPMA, getRecurrences, saveForecast, getTaxTables, getProperties } fro
 import { calculateNetSalary, addMonths, getLastDayOfMonth, fmtDateISO } from './utils.js';
 
 export function generateForecast(year, fromMonth = 1) {
-  const pma = getPMA(year);
-  const recurrences = getRecurrences();
-  const properties = getProperties(year);
-  const taxTables = getTaxTables();
-  const forecast = [];
-  
-  console.log('Generating forecast for year', year, 'from month', fromMonth);
-  
-  // Generate salary movements
-  if (pma.salary && pma.salary.grossAnnual > 0) {
-    const netMonthlySalary = calculateNetSalary(pma.salary.grossAnnual, taxTables);
+  try {
+    const pma = getPMA(year);
+    const recurrences = getRecurrences();
+    const properties = getProperties(year);
+    const taxTables = getTaxTables();
+    const forecast = [];
     
-    // Calculate variable amounts
-    const variablePercent = pma.salary.variablePercent || 0;
-    const totalVariableAmount = (pma.salary.grossAnnual * variablePercent) / 100;
-    const variableMonths = pma.salary.variableMonths || [];
-    const variableDistribution = pma.salary.variableDistribution || {};
+    console.log('Generating forecast for year', year, 'from month', fromMonth);
+    console.log('PMA data:', pma);
     
-    for (let month = fromMonth; month <= 12; month++) {
-      const isExtraPayMonth = (pma.salary.extraPayMonths || []).includes(month);
-      let payAmount = isExtraPayMonth ? netMonthlySalary * 2 : netMonthlySalary;
-      
-      // Add variable amount if this month has variable pay
-      let variableAmount = 0;
-      if (variableMonths.includes(month)) {
-        const monthIndex = variableMonths.indexOf(month);
-        if (monthIndex === 0) {
-          variableAmount = (totalVariableAmount * (variableDistribution.month1 || 0)) / 100;
-        } else if (monthIndex === 1) {
-          variableAmount = (totalVariableAmount * (variableDistribution.month2 || 0)) / 100;
+    // Generate salary movements with minimal logic
+    if (pma.salary && pma.salary.grossAnnual > 0) {
+      try {
+        console.log('Salary config:', pma.salary);
+        const netMonthlySalary = calculateNetSalary(pma.salary.grossAnnual, taxTables);
+        console.log('Net monthly salary:', netMonthlySalary);
+        
+        for (let month = fromMonth; month <= 12; month++) {
+          console.log('Processing month:', month);
+          
+          // Simple date calculation
+          const payDate = `${year}-${String(month).padStart(2, '0')}-25`;
+          
+          forecast.push({
+            date: payDate,
+            accountId: pma.salary.accountId || 'SANTANDER',
+            concept: 'Nómina',
+            amount: netMonthlySalary,
+            category: 'SALARIO',
+            source: 'PMA_SALARY'
+          });
         }
+      } catch (salaryError) {
+        console.error('Error generating salary movements:', salaryError);
       }
-      
-      const payDate = calculatePayDate(year, month, pma.salary.payDay || 25);
-      
-      forecast.push({
-        date: payDate,
-        accountId: pma.salary.accountId || 'SANTANDER',
-        concept: isExtraPayMonth ? 'Nómina + Paga extra' : 'Nómina',
-        amount: payAmount + variableAmount,
-        category: 'SALARIO',
-        source: 'PMA_SALARY'
-      });
     }
+    
+    // Sort by date
+    forecast.sort((a, b) => a.date.localeCompare(b.date));
+    
+    // Save forecast
+    saveForecast(forecast, year);
+    
+    console.log(`Generated ${forecast.length} forecast movements`);
+    return forecast;
+  } catch (error) {
+    console.error('Error in generateForecast:', error);
+    return [];
   }
-  
-  // Generate property rental income and expenses
-  properties.forEach(property => {
-    const propertyMovements = expandPropertyMovements(property, year, fromMonth);
-    forecast.push(...propertyMovements);
-  });
-  
-  // Generate recurrence movements
-  recurrences.forEach(recurrence => {
-    const movements = expandRecurrence(recurrence, year, fromMonth);
-    forecast.push(...movements);
-  });
-  
-  // Sort by date
-  forecast.sort((a, b) => a.date.localeCompare(b.date));
-  
-  // Save forecast
-  saveForecast(forecast, year);
-  
-  console.log(`Generated ${forecast.length} forecast movements`);
-  return forecast;
 }
 
 function calculatePayDate(year, month, payDay) {
