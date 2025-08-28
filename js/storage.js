@@ -11,6 +11,10 @@ const FORECAST_KEY = y => `fp-forecast-${y}`;
 const TAXES_KEY = 'fp-taxes';
 const PROPERTIES_KEY = y => `fp-properties-${y}`;
 const LOANS_KEY = y => `fp-loans-${y}`;
+// Track 360 configuration keys
+const TRACK360_CONFIG_KEY = 'finapp_config';
+const TRACK360_DATA_KEY = 'finapp_data';
+const TRACK360_STATE_KEY = 'finapp_state';
 
 export function ensureSeed(){
   if(!LS.getItem(SETTINGS_KEY)){
@@ -244,4 +248,79 @@ export function applyTheme(){
   body.classList.toggle('theme-dark', s.theme==='dark');
   body.classList.toggle('theme-light', s.theme!=='dark');
   root.style.setProperty('--accent', s.accent||'#7c3aed');
+}
+
+// Track 360 configuration functions
+export function getTrack360Config() {
+  const defaultConfig = {
+    // Global thresholds
+    globalThreshold: 200,
+    bufferAmber: 50,
+    
+    // Reconciliation settings
+    reconciliation: {
+      windowDays: 2,
+      toleranceEur: 5,
+      tolerancePercent: 5,
+      conceptSimilarity: 0.8,
+      includeOverdue: true
+    },
+    
+    // Transfer settings
+    transfers: {
+      cushion: 50,
+      minimum: 20,
+      rounding: 10,
+      preferSameBank: true,
+      interbankDelay: 1,
+      maxDonors: 3
+    },
+    
+    // Projection settings
+    projectionHorizon: 30,
+    weekendPolicy: 'skip', // 'skip' | 'next' | 'previous'
+    holidayPolicy: 'skip',
+    
+    // View settings
+    defaultView: 'Mixto', // 'Mixto' | 'Real' | 'Previsión'
+    numericFormat: 'es-ES',
+    
+    // Bank-specific thresholds (override global)
+    bankThresholds: {}
+  };
+  
+  return JSON.parse(LS.getItem(TRACK360_CONFIG_KEY) || JSON.stringify(defaultConfig));
+}
+
+export function saveTrack360Config(config) {
+  LS.setItem(TRACK360_CONFIG_KEY, JSON.stringify(config));
+}
+
+export function getTrack360Data() {
+  const defaultData = {
+    reales: [],
+    previsiones: [],
+    saldosIniciales: {}
+  };
+  
+  return JSON.parse(LS.getItem(TRACK360_DATA_KEY) || JSON.stringify(defaultData));
+}
+
+export function saveTrack360Data(data) {
+  LS.setItem(TRACK360_DATA_KEY, JSON.stringify(data));
+}
+
+export function getTrack360State() {
+  const defaultState = {
+    currentMonth: new Date().toISOString().substr(0, 7), // YYYY-MM
+    viewFilter: 'Mixto',
+    selectedBank: null,
+    selectedDay: null
+  };
+  
+  return JSON.parse(LS.getItem(TRACK360_STATE_KEY) || JSON.stringify(defaultState));
+}
+
+export function saveTrack360State(state) {
+  LS.setItem(TRACK360_STATE_KEY, JSON.stringify(state));
 }

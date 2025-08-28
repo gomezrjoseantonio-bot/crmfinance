@@ -5,13 +5,14 @@ import viewConfig from './views/view-config.js';
 import viewNomina from './views/view-nomina.js';
 import viewRecurrences from './views/view-recurrences.js';
 import viewCalendar from './views/view-calendar.js';
+import viewTrack360 from './views/view-track360.js';
 import viewLoans from './views/view-loans.js';
 import viewCalculator from './views/view-calculator.js';
 import viewAnnual from './views/view-annual.js';
 import viewExport from './views/view-export.js';
 import viewInmuebles from './views/view-inmuebles-complex.js';
 
-const VIEWS = [viewHoy, viewNomina, viewRecurrences, viewCalendar, viewLoans, viewCalculator, viewInmuebles, viewAnnual, viewMes, viewExport, viewConfig];
+const VIEWS = [viewHoy, viewTrack360, viewNomina, viewRecurrences, viewCalendar, viewLoans, viewCalculator, viewInmuebles, viewAnnual, viewMes, viewExport, viewConfig];
 
 function currentRoute(){ return location.hash || '#/hoy'; }
 

@@ -1,4 +1,4 @@
-import { getSettings, setSettings, getAccounts, saveAccounts, setYear, getYear, applyTheme, getCategories, saveCategories, getBudgets, saveBudgets } from '../storage.js';
+import { getSettings, setSettings, getAccounts, saveAccounts, setYear, getYear, applyTheme, getCategories, saveCategories, getBudgets, saveBudgets, getTrack360Config, saveTrack360Config } from '../storage.js';
 
 const view = {
   route:'#/config', title:'Configuración',
@@ -49,6 +49,85 @@ const view = {
                 <option value="expense">Gasto</option>
               </select>
               <button id="addCat" class="primary">Añadir</button>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:16px">
+          <div class="col">
+            <h2>Track 360 - Configuración avanzada</h2>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:16px">
+              <div>
+                <h3>Umbrales</h3>
+                <label class="small muted">Umbral global por defecto (€)</label><br/>
+                <input type="number" id="globalThreshold" min="0" style="width:120px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Buffer ámbar (€)</label><br/>
+                <input type="number" id="bufferAmber" min="0" style="width:120px">
+              </div>
+              
+              <div>
+                <h3>Conciliación</h3>
+                <label class="small muted">Ventana de días (±)</label><br/>
+                <input type="number" id="windowDays" min="0" max="7" style="width:80px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Tolerancia euros (€)</label><br/>
+                <input type="number" id="toleranceEur" min="0" step="0.01" style="width:100px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Tolerancia porcentaje (%)</label><br/>
+                <input type="number" id="tolerancePercent" min="0" max="100" style="width:80px">
+              </div>
+              
+              <div>
+                <h3>Traspasos</h3>
+                <label class="small muted">Colchón adicional (€)</label><br/>
+                <input type="number" id="cushion" min="0" style="width:100px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Mínimo traspaso (€)</label><br/>
+                <input type="number" id="minimum" min="0" style="width:100px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Redondeo (€)</label><br/>
+                <input type="number" id="rounding" min="1" style="width:80px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Delay interbancario (días)</label><br/>
+                <input type="number" id="interbankDelay" min="0" max="5" style="width:80px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Máximo donantes</label><br/>
+                <input type="number" id="maxDonors" min="1" max="10" style="width:80px">
+              </div>
+              
+              <div>
+                <h3>Proyección</h3>
+                <label class="small muted">Horizonte (días)</label><br/>
+                <input type="number" id="projectionHorizon" min="7" max="365" style="width:100px">
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Política fines de semana</label><br/>
+                <select id="weekendPolicy" style="width:120px">
+                  <option value="skip">Saltar</option>
+                  <option value="next">Siguiente hábil</option>
+                  <option value="previous">Anterior hábil</option>
+                </select>
+                
+                <div style="height:10px"></div>
+                <label class="small muted">Vista por defecto</label><br/>
+                <select id="defaultView" style="width:120px">
+                  <option value="Mixto">Mixto</option>
+                  <option value="Real">Real</option>
+                  <option value="Previsión">Previsión</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style="margin-top:16px">
+              <button id="saveTrack360Config" class="primary">💾 Guardar configuración Track 360</button>
+              <button id="resetTrack360Config" style="margin-left:10px">🔄 Restaurar valores por defecto</button>
             </div>
           </div>
         </div>
@@ -165,6 +244,72 @@ const view = {
       const y = parseInt(root.querySelector('#year').value||new Date().getFullYear(),10);
       setYear(y); alert('Año guardado');
     };
+    
+    // Track 360 configuration handlers
+    function loadTrack360Config() {
+      const config = getTrack360Config();
+      
+      // Load thresholds
+      root.querySelector('#globalThreshold').value = config.globalThreshold;
+      root.querySelector('#bufferAmber').value = config.bufferAmber;
+      
+      // Load reconciliation settings
+      root.querySelector('#windowDays').value = config.reconciliation.windowDays;
+      root.querySelector('#toleranceEur').value = config.reconciliation.toleranceEur;
+      root.querySelector('#tolerancePercent').value = config.reconciliation.tolerancePercent;
+      
+      // Load transfer settings
+      root.querySelector('#cushion').value = config.transfers.cushion;
+      root.querySelector('#minimum').value = config.transfers.minimum;
+      root.querySelector('#rounding').value = config.transfers.rounding;
+      root.querySelector('#interbankDelay').value = config.transfers.interbankDelay;
+      root.querySelector('#maxDonors').value = config.transfers.maxDonors;
+      
+      // Load projection settings
+      root.querySelector('#projectionHorizon').value = config.projectionHorizon;
+      root.querySelector('#weekendPolicy').value = config.weekendPolicy;
+      root.querySelector('#defaultView').value = config.defaultView;
+    }
+    
+    root.querySelector('#saveTrack360Config').onclick = () => {
+      const config = getTrack360Config();
+      
+      // Update thresholds
+      config.globalThreshold = parseInt(root.querySelector('#globalThreshold').value) || 200;
+      config.bufferAmber = parseInt(root.querySelector('#bufferAmber').value) || 50;
+      
+      // Update reconciliation settings
+      config.reconciliation.windowDays = parseInt(root.querySelector('#windowDays').value) || 2;
+      config.reconciliation.toleranceEur = parseFloat(root.querySelector('#toleranceEur').value) || 5;
+      config.reconciliation.tolerancePercent = parseInt(root.querySelector('#tolerancePercent').value) || 5;
+      
+      // Update transfer settings
+      config.transfers.cushion = parseInt(root.querySelector('#cushion').value) || 50;
+      config.transfers.minimum = parseInt(root.querySelector('#minimum').value) || 20;
+      config.transfers.rounding = parseInt(root.querySelector('#rounding').value) || 10;
+      config.transfers.interbankDelay = parseInt(root.querySelector('#interbankDelay').value) || 1;
+      config.transfers.maxDonors = parseInt(root.querySelector('#maxDonors').value) || 3;
+      
+      // Update projection settings
+      config.projectionHorizon = parseInt(root.querySelector('#projectionHorizon').value) || 30;
+      config.weekendPolicy = root.querySelector('#weekendPolicy').value || 'skip';
+      config.defaultView = root.querySelector('#defaultView').value || 'Mixto';
+      
+      saveTrack360Config(config);
+      alert('Configuración Track 360 guardada correctamente');
+    };
+    
+    root.querySelector('#resetTrack360Config').onclick = () => {
+      if (confirm('¿Estás seguro de que quieres restaurar la configuración por defecto?')) {
+        // Clear the config to trigger default values on next load
+        localStorage.removeItem('finapp_config');
+        loadTrack360Config();
+        alert('Configuración restaurada a valores por defecto');
+      }
+    };
+    
+    // Load Track 360 config on mount
+    loadTrack360Config();
   }
 };
 export default view;
